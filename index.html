@@ -2,95 +2,90 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>VR Car Showroom</title>
-  <!-- Load A-Frame Core -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VR Porsche Showroom</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <!-- Load A-Frame Environment Component untuk background Showroom -->
-  <script src="https://unpkg.com/aframe-environment-component@1.3.3/dist/aframe-environment-component.min.js"></script>
 
   <script>
-    // Script Interaktif: Ubah warna mobil saat diklik
-    AFRAME.registerComponent('car-interaction', {
+    // Komponen untuk membuat mobil bisa diklik dan memunculkan info
+    AFRAME.registerComponent('car-info', {
       init: function () {
         let el = this.el;
-        let colors = ['#FF3366', '#33CCFF', '#FFCC00', '#111111', '#EEEEEE'];
-        let currentIndex = 0;
+        let infoText = document.querySelector('#info-panel');
+        let isVisible = false;
 
-        // Event listener saat objek diklik
         el.addEventListener('click', function () {
-          currentIndex = (currentIndex + 1) % colors.length;
-          el.setAttribute('color', colors[currentIndex]);
+          isVisible = !isVisible;
+          // Munculkan atau sembunyikan panel teks
+          infoText.setAttribute('visible', isVisible);
           
-          // Efek animasi kecil saat diklik
-          el.setAttribute('animation', 'property: scale; to: 1.05 1.05 1.05; dur: 150; dir: alternate; loop: 1');
+          // Efek loncat kecil saat diklik
+          el.setAttribute('animation', 'property: position; to: 0 0.1 0; dur: 200; dir: alternate; loop: 1');
         });
 
-        // Event listener saat kursor diarahkan (hover)
+        // Efek kursor saat hover
         el.addEventListener('mouseenter', function () {
-          el.setAttribute('opacity', '0.8');
+          el.setAttribute('scale', '1.02 1.02 1.02');
         });
         el.addEventListener('mouseleave', function () {
-          el.setAttribute('opacity', '1.0');
+          el.setAttribute('scale', '1 1 1');
         });
       }
     });
   </script>
 </head>
 <body>
-  <a-scene environment="preset: contact; groundColor: #445; grid: 1x1;">
+  <a-scene shadow="type: pcfsoft">
     
-    <!-- Asset Management (Untuk 3D Model Asli) -->
-    <!-- Jika punya file 3D mobil (.glb), kamu bisa masukkan di sini:
     <a-assets>
-      <a-asset-item id="car-model" src="assets/mobil.glb"></a-asset-item>
-    </a-assets> 
-    Lalu ganti <a-box> di bawah dengan: <a-gltf-model src="#car-model"></a-gltf-model>
-    -->
+      <a-asset-item id="porsche-model" src="assets/Porsche 356B.glb"></a-asset-item>
+      <a-asset-item id="showroom-model" src="assets/showroom.glb"></a-asset-item>
+    </a-assets>
 
-    <!-- CAMERA & CONTROLS (Walkable) -->
-    <a-entity position="0 1.6 4">
-      <a-camera look-controls wasd-controls="acceleration: 100">
-        <!-- Kursor VR untuk Interaksi -->
+    <a-entity position="0 1.6 5">
+      <a-camera look-controls wasd-controls="acceleration: 150">
         <a-cursor color="#FFF" 
+                  raycaster="objects: .clickable"
                   animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
                   animation__fusing="property: fusing; startEvents: fusing; from: 1 1 1; to: 0.1 0.1 0.1; dur: 1500"
-                  event-set__mouseenter="_event: mouseenter; color: springgreen"
+                  event-set__mouseenter="_event: mouseenter; color: #ff3366"
                   event-set__mouseleave="_event: mouseleave; color: white">
         </a-cursor>
       </a-camera>
     </a-entity>
 
-    <!-- TEKS SAMBUTAN -->
-    <a-text value="Selamat Datang di VR Showroom!\nKlik mobil untuk ganti warna" 
-            position="0 3 -2" 
-            align="center" 
-            color="#FFF" 
-            scale="1.5 1.5 1.5">
-    </a-text>
+    <a-gltf-model src="#showroom-model" 
+                  position="0 0 0" 
+                  scale="1 1 1" 
+                  shadow="receive: true">
+    </a-gltf-model>
 
-    <!-- PODIUM MOBIL -->
-    <a-cylinder position="0 0.1 -2" radius="2.5" height="0.2" color="#222" metalness="0.8" roughness="0.2"></a-cylinder>
-    
-    <!-- MOCKUP MOBIL (Karena model 3D butuh file eksternal, ini mockup bentuk mobil) -->
-    <a-entity position="0 0.5 -2">
-      <!-- Bodi Utama Mobil (Interaktif) -->
-      <a-box class="clickable" car-interaction position="0 0.6 0" width="1.8" height="0.5" depth="4" color="#FF3366" shadow></a-box>
-      <!-- Atap Mobil -->
-      <a-box position="0 1.1 -0.2" width="1.4" height="0.5" depth="2" color="#222" opacity="0.9"></a-box>
+    <a-entity position="0 0.1 0">
       
-      <!-- Ban Depan Kiri -->
-      <a-cylinder position="-1 0.2 -1.2" rotation="0 0 90" radius="0.3" height="0.2" color="#111"></a-cylinder>
-      <!-- Ban Depan Kanan -->
-      <a-cylinder position="1 0.2 -1.2" rotation="0 0 90" radius="0.3" height="0.2" color="#111"></a-cylinder>
-      <!-- Ban Belakang Kiri -->
-      <a-cylinder position="-1 0.2 1.2" rotation="0 0 90" radius="0.3" height="0.2" color="#111"></a-cylinder>
-      <!-- Ban Belakang Kanan -->
-      <a-cylinder position="1 0.2 1.2" rotation="0 0 90" radius="0.3" height="0.2" color="#111"></a-cylinder>
+      <a-gltf-model class="clickable" car-info 
+                    src="#porsche-model" 
+                    position="0 0 0" 
+                    scale="1 1 1" 
+                    shadow="cast: true; receive: true">
+      </a-gltf-model>
+
+      <a-entity id="info-panel" visible="false" position="0 2.5 0" rotation="0 0 0">
+        <a-plane color="#111" width="3" height="1.2" opacity="0.8"></a-plane>
+        <a-text value="PORSCHE 356B\n\nMobil sport klasik legendaris.\nGenerasi pertama dari Porsche." 
+                align="center" 
+                color="#FFF" 
+                position="0 0 0.1" 
+                scale="0.8 0.8 0.8">
+        </a-text>
+      </a-entity>
+
+      <a-plane position="0 0.05 0" rotation="-90 0 0" width="3" height="5" color="#000" opacity="0.5"></a-plane>
     </a-entity>
 
-    <!-- PENGATURAN CAHAYA -->
-    <a-light type="ambient" color="#888"></a-light>
-    <a-light type="directional" position="2 4 -3" intensity="1" castShadow="true"></a-light>
+    <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
+    <a-light type="spot" position="0 5 2" rotation="-60 0 0" color="#ffffff" intensity="1.5" angle="45" penumbra="0.5" castShadow="true"></a-light>
+    <a-light type="point" position="-3 3 -4" color="#33ccff" intensity="0.8"></a-light>
+    <a-light type="point" position="3 3 -4" color="#ff3366" intensity="0.8"></a-light>
 
   </a-scene>
 </body>
