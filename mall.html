@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="description" content="Virtual mall 3D yang bisa dijelajahi dengan space / unit ritel yang bisa disewa secara online.">
+<title>Wolfpup Virtual Mall — Sewa Space Ritel</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0d12;
+    --panel:rgba(16,19,27,.88);
+    --panel-solid:#111420;
+    --stroke:rgba(255,255,255,.10);
+    --stroke-strong:rgba(255,255,255,.22);
+    --text:#eef1f7;
+    --muted:#9aa3b5;
+    --brand:#ffb020;
+    --brand-2:#ff7a45;
+    --ok:#36d399;
+    --booked:#5aa9ff;
+    --rented:#ff5d7a;
+    --radius:14px;
+    --shadow:0 18px 50px rgba(0,0,0,.45);
+    font-synthesis-weight:none;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    overscroll-behavior:none;}
+  a{color:var(--brand)}
+  a-scene{position:fixed;inset:0}
+
+  /* ---------- overlay shell ---------- */
+  #ui{position:fixed;inset:0;z-index:10;pointer-events:none;display:flex;flex-direction:column}
+  #ui .pe{pointer-events:auto}
+
+  /* ---------- top bar ---------- */
+  #topbar{display:flex;align-items:center;gap:14px;padding:10px 14px;
+    background:linear-gradient(180deg,rgba(8,10,15,.92),rgba(8,10,15,0));}
+  .brand{display:flex;align-items:center;gap:10px;min-width:0}
+  .brand .mark{width:34px;height:34px;border-radius:10px;flex:0 0 auto;
+    background:linear-gradient(135deg,var(--brand),var(--brand-2));
+    display:grid;place-items:center;color:#241500;font-weight:800;font-size:15px;letter-spacing:-.5px}
+  .brand h1{font-size:15px;margin:0;line-height:1.15;white-space:nowrap}
+  .brand small{display:block;color:var(--muted);font-size:11px;font-weight:500}
+  #stats{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+  .stat{background:var(--panel);border:1px solid var(--stroke);border-radius:12px;
+    padding:6px 11px;min-width:76px;backdrop-filter:blur(12px)}
+  .stat b{display:block;font-size:16px;line-height:1.1}
+  .stat span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .stat.ok b{color:var(--ok)} .stat.rent b{color:var(--rented)} .stat.book b{color:var(--booked)}
+  .btn{font:inherit;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;
+    background:var(--panel);border:1px solid var(--stroke);border-radius:11px;padding:8px 12px;
+    backdrop-filter:blur(12px);transition:.16s ease;white-space:nowrap}
+  .btn:hover{border-color:var(--stroke-strong);transform:translateY(-1px)}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#241500;border-color:transparent}
+  .btn.ghost{background:rgba(255,255,255,.04)}
+  .btn.danger{background:rgba(255,93,122,.14);border-color:rgba(255,93,122,.35);color:#ffb3c1}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+  /* ---------- sidebar ---------- */
+  #sidebar{position:absolute;top:64px;left:14px;bottom:14px;width:328px;max-width:calc(100vw - 28px);
+    background:var(--panel);border:1px solid var(--stroke);border-radius:var(--radius);
+    box-shadow:var(--shadow);backdrop-filter:blur(16px);display:flex;flex-direction:column;overflow:hidden;
+    transition:transform .25s ease,opacity .25s ease}
+  #sidebar.hidden{transform:translateX(-118%);opacity:0;pointer-events:none}
+  .side-head{padding:12px 12px 8px;border-bottom:1px solid var(--stroke)}
+  .side-head h2{margin:0 0 8px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  #search{width:100%;font:inherit;font-size:13px;color:var(--text);background:rgba(255,255,255,.05);
+    border:1px solid var(--stroke);border-radius:10px;padding:9px 11px;outline:none}
+  #search:focus{border-color:var(--brand)}
+  .chips{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .chip{font-size:11.5px;font-weight:600;padding:6px 10px;border-radius:999px;cursor:pointer;
+    border:1px solid var(--stroke);background:rgba(255,255,255,.04);color:var(--muted);transition:.15s}
+  .chip[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#241500}
+  #unitlist{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+  #unitlist::-webkit-scrollbar{width:8px}
+  #unitlist::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:8px}
+  .card{border:1px solid var(--stroke);border-radius:12px;background:rgba(255,255,255,.035);padding:10px 11px}
+  .card:hover{border-color:var(--stroke-strong);background:rgba(255,255,255,.06)}
+  .card .row{display:flex;align-items:baseline;gap:8px}
+  .card h3{margin:0;font-size:13.5px}
+  .card .cat{font-size:11px;color:var(--muted)}
+  .card .price{margin-top:5px;font-size:13px;font-weight:700;color:var(--brand)}
+  .card .price small{font-weight:500;color:var(--muted);font-size:11px}
+  .card .meta{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .card .acts{display:flex;gap:6px;margin-top:9px}
+  .card .acts .btn{padding:6px 10px;font-size:11.5px;flex:1}
+  .badge{margin-left:auto;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    padding:3px 8px;border-radius:999px;white-space:nowrap}
+  .badge.available{background:rgba(54,211,153,.16);color:var(--ok)}
+  .badge.rented{background:rgba(255,93,122,.16);color:var(--rented)}
+  .badge.booked{background:rgba(90,169,255,.16);color:var(--booked)}
+  .empty{color:var(--muted);font-size:12.5px;text-align:center;padding:24px 8px}
+
+  /* ---------- minimap ---------- */
+  #mapwrap{position:absolute;right:14px;bottom:14px;background:var(--panel);border:1px solid var(--stroke);
+    border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(16px);padding:9px;
+    transition:transform .25s ease,opacity .25s ease}
+  #mapwrap.hidden{transform:translateY(130%);opacity:0;pointer-events:none}
+  #mapwrap .cap{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;
+    display:flex;justify-content:space-between;gap:10px;margin-bottom:6px}
+  #minimap{display:block;border-radius:8px;background:rgba(0,0,0,.35)}
+
+  /* ---------- gaze hint ---------- */
+  #hint{position:absolute;left:50%;top:calc(50% + 42px);transform:translateX(-50%);
+    background:rgba(8,10,15,.86);border:1px solid var(--stroke);border-radius:10px;padding:7px 12px;
+    font-size:12.5px;white-space:nowrap;opacity:0;transition:opacity .15s;backdrop-filter:blur(8px)}
+  #hint.show{opacity:1}
+  #hint b{color:var(--brand)}
+  kbd{background:rgba(255,255,255,.12);border:1px solid var(--stroke-strong);border-bottom-width:2px;
+    border-radius:5px;padding:1px 5px;font-size:10.5px;font-family:ui-monospace,Menlo,Consolas,monospace}
+
+  /* ---------- modal ---------- */
+  #modal{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:16px;
+    background:rgba(4,6,10,.62);backdrop-filter:blur(4px)}
+  #modal.open{display:flex}
+  .sheet{width:min(560px,100%);max-height:min(86vh,760px);overflow-y:auto;background:var(--panel-solid);
+    border:1px solid var(--stroke);border-radius:18px;box-shadow:var(--shadow)}
+  .sheet-head{padding:16px 18px;border-bottom:1px solid var(--stroke);display:flex;gap:12px;align-items:flex-start}
+  .sheet-head h2{margin:0;font-size:19px}
+  .sheet-head p{margin:3px 0 0;color:var(--muted);font-size:12.5px}
+  .sheet-body{padding:16px 18px}
+  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+  .kv div{background:rgba(255,255,255,.04);border:1px solid var(--stroke);border-radius:11px;padding:9px 11px}
+  .kv span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+  .kv b{font-size:14px;font-weight:700}
+  .facil{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .facil em{font-style:normal;font-size:11.5px;color:var(--muted);border:1px solid var(--stroke);
+    border-radius:999px;padding:4px 9px}
+  form label{display:block;font-size:11.5px;color:var(--muted);margin:0 0 4px;font-weight:600}
+  form .f{margin-bottom:11px}
+  form .grid2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  input,select,textarea{width:100%;font:inherit;font-size:13px;color:var(--text);
+    background:rgba(255,255,255,.05);border:1px solid var(--stroke);border-radius:10px;padding:9px 11px;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--brand)}
+  select option{background:var(--panel-solid)}
+  textarea{resize:vertical;min-height:62px}
+  .summary{border:1px dashed var(--stroke-strong);border-radius:12px;padding:11px 13px;margin:6px 0 14px;
+    font-size:12.5px;color:var(--muted)}
+  .summary .line{display:flex;justify-content:space-between;gap:12px;padding:2px 0}
+  .summary .line b{color:var(--text);font-weight:600}
+  .summary .total{border-top:1px solid var(--stroke);margin-top:7px;padding-top:7px;font-size:15px;color:var(--text)}
+  .summary .total b{color:var(--brand);font-size:17px}
+  .sheet-foot{display:flex;gap:8px;justify-content:flex-end;padding:0 18px 18px;flex-wrap:wrap}
+  .note{font-size:11.5px;color:var(--muted);line-height:1.5}
+
+  /* ---------- toast ---------- */
+  #toasts{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;
+    flex-direction:column;gap:8px;align-items:center;width:max-content;max-width:92vw}
+  .toast{background:var(--panel-solid);border:1px solid var(--stroke-strong);border-radius:12px;
+    padding:10px 14px;font-size:13px;box-shadow:var(--shadow);animation:pop .25s ease}
+  .toast.good{border-color:rgba(54,211,153,.5)}
+  .toast.warn{border-color:rgba(255,176,32,.5)}
+  @keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* ---------- joystick ---------- */
+  #joy{position:absolute;left:18px;bottom:18px;width:124px;height:124px;border-radius:50%;
+    border:1px solid var(--stroke);background:rgba(16,19,27,.5);display:none;touch-action:none}
+  #joy .knob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;
+    background:linear-gradient(135deg,var(--brand),var(--brand-2));opacity:.85}
+  body.touch #joy{display:block}
+
+  /* ---------- welcome ---------- */
+  #welcome{position:absolute;inset:0;display:grid;place-items:center;padding:16px;
+    background:radial-gradient(1200px 600px at 50% 0%,rgba(255,176,32,.10),transparent 60%),rgba(4,6,10,.86)}
+  #welcome .sheet{max-width:520px;text-align:left}
+  #welcome ul{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.75}
+  #welcome ul b{color:var(--text)}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+
+  @media (max-width:820px){
+    #topbar{flex-wrap:wrap;gap:8px;padding:8px 10px}
+    .brand{order:1} .brand small{display:none} .brand h1{line-height:1.3}
+    .brand .mark{width:30px;height:30px;border-radius:9px;font-size:14px}
+    .btn{order:2;padding:6px 9px;font-size:11.5px}
+    #stats{order:3;width:100%;margin-left:0;justify-content:flex-start;flex-wrap:nowrap;
+      overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    #stats::-webkit-scrollbar{display:none}
+    #stats .stat{min-width:60px;padding:5px 9px;flex:0 0 auto}
+    #stats .stat b{font-size:14px}
+    .brand h1{font-size:12.5px}
+    #sidebar{top:auto;bottom:0;left:0;right:0;width:100%;max-width:none;height:56vh;border-radius:16px 16px 0 0}
+    #sidebar.hidden{transform:translateY(110%)}
+    #mapwrap{bottom:auto;top:112px;right:10px;padding:7px}
+    #minimap{width:104px;height:142px}
+    #hint{top:auto;bottom:160px;font-size:12px;white-space:normal;max-width:86vw;text-align:center}
+    #joy{width:112px;height:112px}
+    #sidebar:not(.hidden) ~ #hint, #sidebar:not(.hidden) ~ #joy{display:none}
+    form .grid2{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- ======================= 2D OVERLAY UI ======================= -->
+<div id="ui">
+  <div id="topbar" class="pe">
+    <div class="brand">
+      <div class="mark">W</div>
+      <div>
+        <h1>Wolfpup Virtual Mall</h1>
+        <small>Lantai Dasar &middot; Leasing Center</small>
+      </div>
+    </div>
+    <div id="stats">
+      <div class="stat"><b id="st-total">0</b><span>Unit</span></div>
+      <div class="stat ok"><b id="st-avail">0</b><span>Tersedia</span></div>
+      <div class="stat book"><b id="st-booked">0</b><span>Dipesan</span></div>
+      <div class="stat rent"><b id="st-rented">0</b><span>Disewa</span></div>
+      <div class="stat"><b id="st-occ">0%</b><span>Okupansi</span></div>
+    </div>
+    <button class="btn ghost" id="btn-list" title="Tampilkan / sembunyikan daftar space">Daftar Space</button>
+    <button class="btn ghost" id="btn-map" title="Tampilkan / sembunyikan peta">Peta</button>
+    <button class="btn ghost" id="btn-help" title="Kontrol &amp; bantuan">?</button>
+  </div>
+
+  <aside id="sidebar" class="pe">
+    <div class="side-head">
+      <h2>Space yang tersedia</h2>
+      <input id="search" type="search" placeholder="Cari unit, kategori, atau tenant…" autocomplete="off">
+      <div class="chips" id="filters">
+        <button class="chip" data-filter="all" aria-pressed="true">Semua</button>
+        <button class="chip" data-filter="available" aria-pressed="false">Tersedia</button>
+        <button class="chip" data-filter="booked" aria-pressed="false">Dipesan</button>
+        <button class="chip" data-filter="rented" aria-pressed="false">Disewa</button>
+      </div>
+    </div>
+    <div id="unitlist"></div>
+    <div style="padding:10px;border-top:1px solid var(--stroke);display:flex;gap:8px">
+      <button class="btn ghost" id="btn-export" style="flex:1">Ekspor Pesanan</button>
+      <button class="btn ghost" id="btn-reset" style="flex:1">Reset Pesanan</button>
+    </div>
+  </aside>
+
+  <div id="mapwrap" class="pe">
+    <div class="cap"><span>Denah</span><span id="map-pos">0, 0</span></div>
+    <canvas id="minimap" width="150" height="205"></canvas>
+  </div>
+
+  <div id="hint"></div>
+  <div id="joy" class="pe"><div class="knob"></div></div>
+  <div id="toasts"></div>
+
+  <!-- unit detail + rental form -->
+  <div id="modal" class="pe" role="dialog" aria-modal="true">
+    <div class="sheet" id="sheet"></div>
+  </div>
+
+  <!-- welcome / controls -->
+  <div id="welcome" class="pe">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div>
+          <h2>Selamat datang di Wolfpup Virtual Mall</h2>
+          <p>Mall 3D yang bisa kamu jelajahi sendiri — setiap unit kosong bisa langsung disewa.</p>
+        </div>
+      </div>
+      <div class="sheet-body">
+        <ul>
+          <li><b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b> atau tombol panah untuk berjalan</li>
+          <li><b>Drag mouse</b> (atau geser layar) untuk melihat sekeliling</li>
+          <li>Arahkan crosshair ke etalase lalu <b>klik</b> — atau tekan <kbd>E</kbd> — untuk melihat detail &amp; menyewa</li>
+          <li>Di HP: gunakan <b>joystick</b> di kiri bawah untuk berjalan</li>
+          <li><kbd>M</kbd> peta &middot; <kbd>L</kbd> daftar space &middot; <kbd>Esc</kbd> tutup panel</li>
+        </ul>
+        <div class="legend">
+          <span><i style="background:#36d399"></i>Tersedia</span>
+          <span><i style="background:#5aa9ff"></i>Dipesan (pesananmu)</span>
+          <span><i style="background:#ff5d7a"></i>Sudah disewa</span>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn primary" id="btn-enter">Masuk ke Mall</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= 3D SCENE ======================= -->
+<a-scene id="scene" shadow="type: pcfsoft" renderer="colorManagement: true; antialias: true; physicallyCorrectLights: true"
+         vr-mode-ui="enabled: true" loading-screen="dotsColor: #ffb020; backgroundColor: #0b0d12">
+
+  <a-assets timeout="20000">
+    <a-asset-item id="porsche-model" src="assets/Porsche%20356B.glb"></a-asset-item>
+  </a-assets>
+
+  <a-sky color="#9fb7d4"></a-sky>
+  <a-entity light="type: hemisphere; color: #dfeaff; groundColor: #6b6257; intensity: 0.85"></a-entity>
+  <a-entity light="type: ambient; color: #ffffff; intensity: 0.45"></a-entity>
+  <a-entity light="type: directional; color: #fff4e0; intensity: 0.75; castShadow: false"
+            position="14 26 12"></a-entity>
+
+  <!-- pemain -->
+  <a-entity id="rig">
+    <a-camera id="cam" position="0 1.6 28" wasd-controls="acceleration: 45; fly: false"
+              look-controls="pointerLockEnabled: false; magicWindowTrackingEnabled: true"
+              mall-controls>
+      <a-cursor color="#ffb020" raycaster="objects: .clickable; far: 26"
+                fuse="false" scale="0.7 0.7 0.7"
+                animation__click="property: scale; startEvents: click; from: 0.25 0.25 0.25; to: 0.7 0.7 0.7; dur: 180">
+      </a-cursor>
+    </a-camera>
+  </a-entity>
+
+  <!-- struktur mall dibangun oleh script -->
+  <a-entity id="mall-structure"></a-entity>
+  <a-entity id="mall-units"></a-entity>
+  <a-entity id="mall-props"></a-entity>
+</a-scene>
+
+<script>
+/* =====================================================================
+   WOLFPUP VIRTUAL MALL — walkable mall + leasing (sewa space)
+   Semua geometri mall dibangun secara prosedural (tanpa model eksternal)
+   ===================================================================== */
+(function () {
+  'use strict';
+
+  /* ------------------------------ konfigurasi ------------------------------ */
+  var MALL      = { minX: -20, maxX: 20, minZ: -36, maxZ: 32 };
+  var FRONT_L   = -7, FRONT_R = 7;          // garis etalase kiri & kanan (lebar koridor 14 m)
+  var DOOR_W    = 3.4;                      // lebar pintu masuk unit
+  var WALL_H    = 5;                        // tinggi partisi unit
+  var CEIL_Y    = 6;                        // tinggi plafon
+  var SERVICE_CHARGE = 85000;               // Rp / m2 / bulan
+  var DEPOSIT_MONTHS = 3;
+  var LS_KEY    = 'wolfpup-mall-bookings-v1';
+  var LS_WAIT   = 'wolfpup-mall-waitlist-v1';
+
+  var STATUS = {
+    available: { label: 'Tersedia',  color: '#36d399', dim: '#1d7a5a' },
+    booked:    { label: 'Dipesan',   color: '#5aa9ff', dim: '#2f6bb0' },
+    rented:    { label: 'Disewa',    color: '#ff5d7a', dim: '#a33549' }
+  };
+
+  var DISCOUNTS = { 3: 0, 6: 0.02, 12: 0.05, 24: 0.10, 36: 0.15 };
+
+  /* --------------------------------- data ---------------------------------- */
+  // slot z: index 0 = paling dekat pintu masuk (selatan), index 6 = paling dalam
+  var Z_SLOTS = [24, 15, 6, -3, -12, -21, -30];
+
+  var ROW_DEFS = [
+    // ---- Blok A (sisi barat / kiri) ----
+    { code:'A1', row:'L', slot:0, depth:13, zone:'prime',    cat:'Fashion & Apparel',   status:'rented',    tenant:'Nusantara Batik',  tagline:'Batik & wastra modern' },
+    { code:'A2', row:'L', slot:1, depth:12, zone:'prime',    cat:'Food & Beverage',     status:'available', tenant:null,               tagline:'Cocok untuk resto / cafe' },
+    { code:'A3', row:'L', slot:2, depth:12, zone:'standard', cat:'Elektronik & Gadget', status:'rented',    tenant:'TechNest Gadget',  tagline:'Gadget & aksesoris' },
+    { code:'A4', row:'L', slot:3, depth:14, zone:'standard', cat:'Otomotif & Showroom', status:'rented',    tenant:'Porsche Gallery',  tagline:'Showroom mobil klasik' },
+    { code:'A5', row:'L', slot:4, depth:11, zone:'standard', cat:'Kecantikan & Spa',    status:'available', tenant:null,               tagline:'Siap untuk klinik / salon' },
+    { code:'A6', row:'L', slot:5, depth:12, zone:'deep',     cat:'Food & Beverage',     status:'rented',    tenant:'Kopi Senja',       tagline:'Specialty coffee bar' },
+    { code:'A7', row:'L', slot:6, depth:11, zone:'deep',     cat:'Serbaguna / Office',  status:'available', tenant:null,               tagline:'Bisa untuk kantor / studio' },
+    // ---- Blok B (sisi timur / kanan) ----
+    { code:'B1', row:'R', slot:0, depth:13, zone:'prime',    cat:'Food & Beverage',     status:'rented',    tenant:'Aroma Bakery',     tagline:'Bakery & patisserie' },
+    { code:'B2', row:'R', slot:1, depth:12, zone:'prime',    cat:'Fashion & Apparel',   status:'available', tenant:null,               tagline:'Etalase kaca menghadap atrium' },
+    { code:'B3', row:'R', slot:2, depth:12, zone:'standard', cat:'Sport & Outdoor',     status:'available', tenant:null,               tagline:'Ideal untuk sport store' },
+    { code:'B4', row:'R', slot:3, depth:14, zone:'standard', cat:'Sport & Wellness',    status:'rented',    tenant:'Zen Fitness',      tagline:'Gym & studio yoga' },
+    { code:'B5', row:'R', slot:4, depth:11, zone:'standard', cat:'Anak & Mainan',       status:'available', tenant:null,               tagline:'Dekat area bermain anak' },
+    { code:'B6', row:'R', slot:5, depth:12, zone:'deep',     cat:'Buku & Hobi',         status:'available', tenant:null,               tagline:'Unit tenang untuk hobby store' },
+    { code:'B7', row:'R', slot:6, depth:11, zone:'deep',     cat:'Home & Living',       status:'available', tenant:null,               tagline:'Akses loading dock belakang' }
+  ];
+
+  var KIOSK_DEFS = [
+    { code:'K1', z: 20,  size:4, cat:'Minuman',           status:'rented',    tenant:'Juice Bar Segar', tagline:'Jus & smoothie' },
+    { code:'K2', z: 9,   size:4, cat:'Aksesoris',         status:'available', tenant:null,              tagline:'Kios tengah koridor utama' },
+    { code:'K3', z: -8,  size:4, cat:'Jasa & Layanan',    status:'available', tenant:null,              tagline:'Cocok untuk counter jasa' },
+    { code:'K4', z: -25, size:4, cat:'Kopi & Snack',      status:'available', tenant:null,              tagline:'Dekat area eskalator' }
+  ];
+
+  var RATES = { prime: 320000, standard: 260000, deep: 210000, kiosk: 520000 };
+
+  var FACILITIES_UNIT = ['AC sentral', 'Listrik 5.500 VA', 'Air bersih', 'Grease trap (F&B)', 'CCTV 24 jam', 'Wi-Fi tenant', 'Signage board', 'Loading access'];
+  var FACILITIES_KIOSK = ['AC koridor', 'Listrik 2.200 VA', 'Meja counter', 'Signage kanopi', 'CCTV 24 jam', 'Wi-Fi tenant'];
+
+  /* -------------------------------- runtime -------------------------------- */
+  var UNITS = [];                 // seluruh unit (shop + kiosk)
+  var BY_ID = {};
+  var COLLIDERS = [];             // {x1,z1,x2,z2}
+  var bookings = loadJSON(LS_KEY, {});
+  var waitlist = loadJSON(LS_WAIT, {});
+  var activeFilter = 'all';
+  var searchTerm = '';
+  var hovered = null;
+
+  function loadJSON(key, fallback) {
+    try { var v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' ? v : fallback; }
+    catch (e) { return fallback; }
+  }
+  function saveJSON(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { toast('Browser memblokir penyimpanan lokal.', 'warn'); }
+  }
+
+  var rupiah = function (n) { return 'Rp ' + Math.round(n).toLocaleString('id-ID'); };
+  var shortRp = function (n) {
+    if (n >= 1e9) return 'Rp ' + (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + ' M';
+    if (n >= 1e6) return 'Rp ' + (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + ' jt';
+    return rupiah(n);
+  };
+
+  /* ---------------------------- bangun data unit ---------------------------- */
+  function buildData() {
+    ROW_DEFS.forEach(function (d) {
+      var facing = d.row === 'L' ? 1 : -1;               // arah hadap etalase (ke koridor)
+      var front  = d.row === 'L' ? FRONT_L : FRONT_R;
+      var dz     = 8;
+      var cx     = front - facing * (d.depth / 2);
+      var cz     = Z_SLOTS[d.slot];
+      var area   = d.depth * dz;
+      var rate   = RATES[d.zone];
+      var u = {
+        id: d.code, kind: 'shop', name: 'Space ' + d.code, cat: d.cat, tagline: d.tagline,
+        baseStatus: d.status, tenant: d.tenant,
+        cx: cx, cz: cz, dx: d.depth, dz: dz, facing: facing, front: front,
+        width: dz, depth: d.depth, area: area, zone: d.zone,
+        rate: rate, monthly: Math.round(area * rate / 100000) * 100000,
+        service: Math.round(area * SERVICE_CHARGE / 100000) * 100000,
+        facilities: FACILITIES_UNIT, refs: {}
+      };
+      UNITS.push(u); BY_ID[u.id] = u;
+    });
+
+    KIOSK_DEFS.forEach(function (d) {
+      var area = d.size * d.size;
+      var u = {
+        id: d.code, kind: 'kiosk', name: 'Kios ' + d.code, cat: d.cat, tagline: d.tagline,
+        baseStatus: d.status, tenant: d.tenant,
+        cx: 0, cz: d.z, dx: d.size, dz: d.size, facing: -1, front: 0,
+        width: d.size, depth: d.size, area: area, zone: 'kiosk',
+        rate: RATES.kiosk, monthly: Math.round(area * RATES.kiosk / 100000) * 100000,
+        service: Math.round(area * SERVICE_CHARGE / 100000) * 100000,
+        facilities: FACILITIES_KIOSK, refs: {}
+      };
+      UNITS.push(u); BY_ID[u.id] = u;
+    });
+  }
+
+  function statusOf(u) {
+    if (u.baseStatus === 'rented') return 'rented';
+    return bookings[u.id] ? 'booked' : 'available';
+  }
+
+  /* ------------------------------- helper 3D -------------------------------- */
+  function make(tag, attrs, parent) {
+    var e = document.createElement(tag);
+    for (var k in attrs) if (attrs[k] !== null && attrs[k] !== undefined) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  // box(parent, x, y, z, w, h, d, color, opts)
+  function box(parent, x, y, z, w, h, d, color, opts) {
+    opts = opts || {};
+    var attrs = {
+      position: x + ' ' + y + ' ' + z,
+      width: w, height: h, depth: d, color: color,
+      shadow: 'cast: ' + (opts.cast === true) + '; receive: ' + (opts.receive !== false)
+    };
+    if (opts.opacity !== undefined) { attrs.opacity = opts.opacity; attrs.transparent = 'true'; }
+    if (opts.metalness !== undefined) attrs.metalness = opts.metalness;
+    if (opts.roughness !== undefined) attrs.roughness = opts.roughness;
+    if (opts.cls) attrs['class'] = opts.cls;
+    var e = make('a-box', attrs, parent);
+    if (opts.collide && (y - h / 2) < 2.2) {
+      var o = opts.origin || [0, 0];   // box bisa berada di dalam entity anak
+      COLLIDERS.push({
+        x1: o[0] + x - w / 2, x2: o[0] + x + w / 2,
+        z1: o[1] + z - d / 2, z2: o[1] + z + d / 2
+      });
+    }
+    return e;
+  }
+  function text(parent, value, x, y, z, rotY, opts) {
+    opts = opts || {};
+    return make('a-text', {
+      value: value, position: x + ' ' + y + ' ' + z, rotation: '0 ' + rotY + ' 0',
+      align: opts.align || 'center', color: opts.color || '#ffffff',
+      width: opts.width || 6, 'baseline': opts.baseline || 'center',
+      'wrap-count': opts.wrap || 28
+    }, parent);
+  }
+
+  /* --------------------------- struktur bangunan ---------------------------- */
+  function buildStructure() {
+    var root = document.getElementById('mall-structure');
+    var cx = (MALL.minX + MALL.maxX) / 2, cz = (MALL.minZ + MALL.maxZ) / 2;
+    var W = MALL.maxX - MALL.minX, D = MALL.maxZ - MALL.minZ;
+
+    // lantai utama + runner koridor
+    make('a-plane', {
+      position: cx + ' 0 ' + cz, rotation: '-90 0 0', width: W, height: D,
+      color: '#d8d2c6', roughness: 0.9, shadow: 'receive: true'
+    }, root);
+    make('a-plane', {
+      position: '0 0.02 ' + cz, rotation: '-90 0 0', width: 13.6, height: D,
+      color: '#efe9dd', roughness: 0.75
+    }, root);
+    // garis pola koridor
+    for (var z = MALL.minZ + 4; z < MALL.maxZ; z += 6) {
+      make('a-plane', { position: '0 0.03 ' + z, rotation: '-90 0 0', width: 13.6, height: 0.35, color: '#c9b892' }, root);
+    }
+    // apron di depan tiap etalase
+    make('a-plane', { position: (FRONT_L + 1.1) + ' 0.03 ' + cz, rotation: '-90 0 0', width: 2.2, height: D, color: '#b9b0a0' }, root);
+    make('a-plane', { position: (FRONT_R - 1.1) + ' 0.03 ' + cz, rotation: '-90 0 0', width: 2.2, height: D, color: '#b9b0a0' }, root);
+
+    // dinding luar
+    var wallColor = '#e7e2d8';
+    box(root, MALL.minX - 0.25, 3, cz, 0.5, 6, D, wallColor, { collide: true });          // barat
+    box(root, MALL.maxX + 0.25, 3, cz, 0.5, 6, D, wallColor, { collide: true });          // timur
+    box(root, cx, 3, MALL.minZ - 0.25, W + 1, 6, 0.5, wallColor, { collide: true });      // utara
+    // selatan (dengan bukaan pintu masuk selebar 12 m)
+    box(root, -13, 3, MALL.maxZ + 0.25, 14, 6, 0.5, wallColor, { collide: true });
+    box(root,  13, 3, MALL.maxZ + 0.25, 14, 6, 0.5, wallColor, { collide: true });
+    box(root,   0, 5.2, MALL.maxZ + 0.25, 12, 1.6, 0.5, '#2c3140', { collide: false });
+    text(root, 'WOLFPUP VIRTUAL MALL', 0, 5.2, MALL.maxZ - 0.1, 180, { width: 16, color: '#ffb020' });
+    text(root, 'MAIN ENTRANCE  •  LANTAI DASAR', 0, 4.5, MALL.maxZ - 0.1, 180, { width: 10, color: '#cbd3e2' });
+
+    // plafon di atas deretan toko + balok melintang koridor (atrium terbuka)
+    make('a-plane', { position: ((MALL.minX + FRONT_L) / 2) + ' ' + CEIL_Y + ' ' + cz, rotation: '90 0 0', width: (FRONT_L - MALL.minX), height: D, color: '#f2efe8' }, root);
+    make('a-plane', { position: ((MALL.maxX + FRONT_R) / 2) + ' ' + CEIL_Y + ' ' + cz, rotation: '90 0 0', width: (MALL.maxX - FRONT_R), height: D, color: '#f2efe8' }, root);
+    for (var bz = MALL.minZ + 3; bz < MALL.maxZ; bz += 6) {
+      box(root, 0, CEIL_Y - 0.2, bz, 14.2, 0.4, 0.55, '#dcd6ca', { cast: false });
+    }
+    // strip lampu plafon
+    for (var lz = MALL.minZ + 5; lz < MALL.maxZ; lz += 8) {
+      make('a-box', { position: (FRONT_L - 4) + ' ' + (CEIL_Y - 0.12) + ' ' + lz, width: 8, height: 0.08, depth: 0.5, color: '#fff6df', emissive: '#fff3d0', 'emissive-intensity': 0.9 }, root);
+      make('a-box', { position: (FRONT_R + 4) + ' ' + (CEIL_Y - 0.12) + ' ' + lz, width: 8, height: 0.08, depth: 0.5, color: '#fff6df', emissive: '#fff3d0', 'emissive-intensity': 0.9 }, root);
+    }
+    // pencahayaan koridor
+    [20, 4, -12, -28].forEach(function (pz) {
+      make('a-entity', { light: 'type: point; intensity: 0.42; distance: 26; color: #ffeccd', position: '0 5 ' + pz }, root);
+    });
+
+    // eskalator & area lantai 2 (dekoratif) di ujung utara
+    var esc = make('a-entity', { position: '0 0 ' + (MALL.minZ + 6) }, root);
+    for (var s = 0; s < 10; s++) {
+      box(esc, -2.2, 0.25 + s * 0.28, -s * 0.55, 3.4, 0.5 + s * 0.56, 0.55, s % 2 ? '#a9b0be' : '#98a0ae', {});
+      box(esc,  2.2, 0.25 + s * 0.28, -s * 0.55, 3.4, 0.5 + s * 0.56, 0.55, s % 2 ? '#a9b0be' : '#98a0ae', {});
+    }
+    box(esc, 0, 4.4, -2.6, 13, 0.3, 6, '#cfd5df', { cast: false });
+    text(esc, 'LANTAI 2  •  SEGERA HADIR', 0, 5.1, -2.5, 0, { width: 11, color: '#3a4152' });
+    COLLIDERS.push({ x1: -4.6, x2: 4.6, z1: MALL.minZ + 1, z2: MALL.minZ + 7 });
+
+    // air mancur atrium
+    var f = make('a-entity', { position: '0 0 0' }, root);
+    make('a-cylinder', { position: '0 0.35 0', radius: 2.6, height: 0.7, color: '#c3ccd8', shadow: 'receive: true' }, f);
+    make('a-cylinder', { position: '0 0.72 0', radius: 2.3, height: 0.08, color: '#4fa8d8', opacity: 0.85, transparent: 'true' }, f);
+    make('a-cylinder', { position: '0 1.3 0', radius: 0.35, height: 1.6, color: '#e6e9ee' }, f);
+    make('a-sphere', { position: '0 2.35 0', radius: 0.55, color: '#7ec8ef', opacity: 0.8, transparent: 'true',
+      animation: 'property: position; to: 0 2.6 0; dir: alternate; loop: true; dur: 2200; easing: easeInOutSine' }, f);
+    COLLIDERS.push({ x1: -2.7, x2: 2.7, z1: -2.7, z2: 2.7 });
+
+    // papan direktori dekat pintu masuk
+    var dir = make('a-entity', { position: '-4.6 0 27' }, root);
+    box(dir, 0, 1.6, 0, 0.35, 3.2, 2.6, '#1b1f2b', { collide: true, origin: [-4.6, 27] });
+    text(dir, 'DIREKTORI\nLANTAI DASAR', 0.2, 2.5, 0, 90, { width: 3.4, color: '#ffb020' });
+    text(dir, 'BLOK A  :  A1 - A7\nBLOK B  :  B1 - B7\nKIOS    :  K1 - K4\n\nLeasing: klik etalase\nuntuk menyewa', 0.2, 1.4, 0, 90, { width: 3, color: '#dfe5f0' });
+
+    // bangku & planter sepanjang koridor
+    var props = document.getElementById('mall-props');
+    [22, 13, -1, -10, -19, -28].forEach(function (pz, i) {
+      var sx = i % 2 === 0 ? -4.2 : 4.2;
+      box(props, sx, 0.45, pz, 1.1, 0.16, 2.6, '#8a6f52', { collide: true });
+      box(props, sx, 0.2, pz, 0.7, 0.4, 2.2, '#5d5145', { cast: false });
+      var px = -sx;
+      make('a-cylinder', { position: px + ' 0.4 ' + pz, radius: 0.55, height: 0.8, color: '#9aa3ad' }, props);
+      make('a-sphere', { position: px + ' 1.15 ' + pz, radius: 0.72, color: '#3f8b52' }, props);
+      make('a-sphere', { position: (px + 0.35) + ' 0.95 ' + (pz + 0.3), radius: 0.5, color: '#4b9c5e' }, props);
+      COLLIDERS.push({ x1: px - 0.6, x2: px + 0.6, z1: pz - 0.6, z2: pz + 0.6 });
+    });
+  }
+
+  var ACCENTS = [
+    ['Food', '#e6c184'], ['Fashion', '#d3a3c2'], ['Elektronik', '#8fb9df'], ['Kecantikan', '#e8b6c6'],
+    ['Sport', '#93c9a5'], ['Anak', '#f2bd8c'], ['Buku', '#b7abe0'], ['Home', '#c8b193'],
+    ['Jasa', '#a6c9d6'], ['Otomotif', '#a6adbb'], ['Minuman', '#8fd3c4'], ['Kopi', '#c9a480'],
+    ['Aksesoris', '#dcc6a0'], ['Serbaguna', '#c3c7cd']
+  ];
+  function accentColor(cat) {
+    for (var i = 0; i < ACCENTS.length; i++) if (cat.indexOf(ACCENTS[i][0]) === 0 || cat.indexOf(ACCENTS[i][0]) > -1) return ACCENTS[i][1];
+    return '#cfc7bb';
+  }
+
+  /* ------------------------------ bangun unit ------------------------------ */
+  function buildUnits() {
+    var root = document.getElementById('mall-units');
+    UNITS.forEach(function (u) {
+      if (u.kind === 'shop') buildShop(u, root); else buildKiosk(u, root);
+      updateUnitVisual(u);
+    });
+  }
+
+  function buildShop(u, root) {
+    var e = make('a-entity', { position: u.cx + ' 0 ' + u.cz, id: 'unit-' + u.id }, root);
+    var fx = u.facing * (u.dx / 2);                  // x etalase relatif ke pusat unit
+    var bx = -fx;                                    // x dinding belakang
+    var rotY = u.facing > 0 ? 90 : -90;              // rotasi menghadap koridor
+
+    // lantai unit
+    make('a-plane', { position: '0 0.04 0', rotation: '-90 0 0', width: u.dx, height: u.dz, color: '#efe6d8', roughness: 0.85 }, e);
+    // dinding belakang + samping
+    var org = [u.cx, u.cz];
+    box(e, bx, WALL_H / 2, 0, 0.3, WALL_H, u.dz, '#e3ded4', { collide: true, origin: org });
+    box(e, 0, WALL_H / 2, -u.dz / 2, u.dx, WALL_H, 0.3, '#ded8cd', { collide: true, origin: org });
+    box(e, 0, WALL_H / 2,  u.dz / 2, u.dx, WALL_H, 0.3, '#ded8cd', { collide: true, origin: org });
+
+    // etalase kaca (dua panel, menyisakan pintu di tengah)
+    var panelW = (u.dz - DOOR_W) / 2;
+    [-1, 1].forEach(function (sgn) {
+      var pz = sgn * (DOOR_W / 2 + panelW / 2);
+      box(e, fx, 2.1, pz, 0.18, 4.2, panelW, '#9fc6dd', { collide: true, origin: org, opacity: 0.16, metalness: 0.2, roughness: 0.05 });
+      box(e, fx, 0.15, pz, 0.3, 0.3, panelW, '#6c7484', { collide: false });
+    });
+    // kusen pintu + bulkhead atas
+    box(e, fx, 4.3, 0, 0.4, 0.5, u.dz, '#2f3644', { collide: false });
+    box(e, fx, 4.75, 0, 0.36, 0.5, u.dz, '#3a4252', { collide: false });
+
+    // papan nama + strip status
+    var sx = fx + u.facing * 0.28;
+    box(e, sx, 5.35, 0, 0.16, 1.15, u.dz * 0.86, '#161a24', { collide: false });
+    u.refs.name = text(e, u.name, sx + u.facing * 0.1, 5.55, 0, rotY, { width: u.dz * 0.95, color: '#ffffff' });
+    u.refs.sub  = text(e, '', sx + u.facing * 0.1, 5.05, 0, rotY, { width: u.dz * 0.8, color: '#9aa3b5' });
+    u.refs.strip = box(e, fx + u.facing * 0.2, 4.62, 0, 0.1, 0.18, u.dz * 0.86, '#36d399', { collide: false });
+
+    // papan leasing di samping pintu (harga / tenant)
+    var bz = (DOOR_W / 2 + panelW / 2);
+    var bx2 = fx + u.facing * 0.34;
+    u.refs.frame = box(e, bx2, 1.8, bz, 0.08, 1.62, 2.02, '#36d399', { collide: false });
+    u.refs.board = box(e, bx2 + u.facing * 0.05, 1.8, bz, 0.06, 1.5, 1.9, '#12182a', { collide: false });
+    u.refs.boardTitle = text(e, '', bx2 + u.facing * 0.1, 2.28, bz, rotY, { width: 2.6, color: '#36d399' });
+    u.refs.boardBody  = text(e, '', bx2 + u.facing * 0.1, 1.68, bz, rotY, { width: 2.2, color: '#e7ebf3', wrap: 30 });
+
+    // interior
+    box(e, bx + u.facing * 0.9, 1.4, 0, 0.25, 2.8, u.dz * 0.7, accentColor(u.cat), { cast: false });   // backdrop
+    u.refs.wallText = text(e, '', bx + u.facing * 1.1, 2.4, 0, rotY, { width: u.dz * 0.9, color: '#5b6273', wrap: 22 });
+    box(e, -u.facing * 0.2, 0.5, -u.dz / 2 + 1.4, 1.6, 1.0, 2.2, '#cbb79a', { collide: true, origin: org });  // counter
+    box(e, u.facing * (u.dx / 2 - 3.2), 0.9, u.dz / 2 - 1.3, 0.5, 1.8, 2.0, '#d9d2c4', { collide: true, origin: org }); // rak
+
+    // interaksi: bidang transparan menutup bukaan etalase
+    var hit = make('a-plane', {
+      position: (fx + u.facing * 0.55) + ' 2.2 0', rotation: '0 ' + rotY + ' 0',
+      width: u.dz, height: 4.4, opacity: 0.001, transparent: 'true', side: 'double',
+      'class': 'clickable'
+    }, e);
+    wireInteraction(hit, u);
+
+    // showroom khusus: model Porsche dari repo ini
+    if (u.tenant === 'Porsche Gallery') {
+      make('a-cylinder', { position: '0 0.12 0', radius: 2.6, height: 0.24, color: '#20242e', metalness: 0.4, roughness: 0.4 }, e);
+      var turn = make('a-entity', { position: '0 0.24 0',
+        animation: 'property: rotation; to: 0 360 0; loop: true; dur: 22000; easing: linear' }, e);
+      make('a-gltf-model', { src: '#porsche-model', position: '0 0 0', rotation: '0 ' + (u.facing > 0 ? 90 : -90) + ' 0', shadow: 'cast: true' }, turn);
+      make('a-entity', { light: 'type: spot; intensity: 1.1; angle: 42; penumbra: 0.5; color: #fff1d8; castShadow: true; shadowMapWidth: 1024; shadowMapHeight: 1024', position: '0 4.2 0', rotation: '-90 0 0' }, e);
+      var link = make('a-plane', {
+        position: (bx + u.facing * 1.2) + ' 1.1 ' + (-u.dz / 2 + 1.6), rotation: '0 ' + rotY + ' 0',
+        width: 2.6, height: 0.7, color: '#ffb020', 'class': 'clickable'
+      }, e);
+      make('a-text', { value: 'BUKA SHOWROOM VR', position: '0 0 0.02', align: 'center', color: '#241500', width: 4.6 }, link);
+      link.addEventListener('click', function () { window.location.href = 'index.html'; });
+      link.addEventListener('mouseenter', function () { showHint('Buka showroom Porsche (halaman lain)'); });
+      link.addEventListener('mouseleave', hideHint);
+    }
+  }
+
+  function buildKiosk(u, root) {
+    var e = make('a-entity', { position: u.cx + ' 0 ' + u.cz, id: 'unit-' + u.id }, root);
+    var s = u.dx;
+    // counter
+    box(e, 0, 0.55, 0, s, 1.1, s, '#e8e1d3', { collide: true, origin: [u.cx, u.cz] });
+    box(e, 0, 1.15, 0, s + 0.3, 0.12, s + 0.3, '#6f5a3f', { collide: false });
+    // tiang + kanopi
+    [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(function (c) {
+      box(e, c[0] * (s / 2 - 0.15), 1.7, c[1] * (s / 2 - 0.15), 0.16, 3.4, 0.16, '#3c4250', { collide: false });
+    });
+    box(e, 0, 3.45, 0, s + 0.8, 0.22, s + 0.8, '#232936', { collide: false });
+    box(e, 0, 3.33, 0, s + 0.74, 0.04, s + 0.74, '#f3f0ea', { collide: false });
+    u.refs.strips = [
+      box(e, 0, 3.3, (s + 0.8) / 2, s + 0.84, 0.13, 0.06, '#36d399', { collide: false }),
+      box(e, 0, 3.3, -(s + 0.8) / 2, s + 0.84, 0.13, 0.06, '#36d399', { collide: false }),
+      box(e, (s + 0.8) / 2, 3.3, 0, 0.06, 0.13, s + 0.84, '#36d399', { collide: false }),
+      box(e, -(s + 0.8) / 2, 3.3, 0, 0.06, 0.13, s + 0.84, '#36d399', { collide: false })
+    ];
+    // papan nama dua sisi
+    u.refs.name = text(e, u.name, 0, 3.0, s / 2 + 0.42, 0, { width: 5.4, color: '#ffffff' });
+    u.refs.name2 = text(e, u.name, 0, 3.0, -s / 2 - 0.42, 180, { width: 5.4, color: '#ffffff' });
+    u.refs.boardTitle = text(e, '', 0, 2.55, s / 2 + 0.42, 0, { width: 4.2, color: '#36d399' });
+    u.refs.boardBody  = text(e, '', 0, 2.2, -s / 2 - 0.42, 180, { width: 4.2, color: '#e7ebf3' });
+    u.refs.sub = text(e, '', 0, 2.2, s / 2 + 0.42, 0, { width: 4.2, color: '#c8cede' });
+
+    var hit = make('a-box', {
+      position: '0 1.7 0', width: s + 1.2, height: 3.4, depth: s + 1.2,
+      opacity: 0.001, transparent: 'true', 'class': 'clickable'
+    }, e);
+    wireInteraction(hit, u);
+  }
+
+  function wireInteraction(el, u) {
+    el.addEventListener('click', function () { openUnit(u.id); });
+    el.addEventListener('mouseenter', function () {
+      hovered = u;
+      var st = statusOf(u);
+      showHint('<b>' + u.name + '</b> &middot; ' + u.area + ' m&sup2; &middot; ' +
+        (st === 'available' ? shortRp(u.monthly) + '/bln — klik untuk menyewa'
+          : st === 'booked' ? 'Dipesan olehmu — klik untuk detail'
+          : 'Disewa ' + u.tenant + ' — klik untuk detail'));
+    });
+    el.addEventListener('mouseleave', function () { if (hovered === u) hovered = null; hideHint(); });
+  }
+
+  /* ------------------------- update tampilan 3D unit ------------------------ */
+  function updateUnitVisual(u) {
+    var st = statusOf(u), meta = STATUS[st], r = u.refs;
+    var paint = function (el) {
+      if (!el) return;
+      el.setAttribute('material', 'color: ' + meta.color + '; emissive: ' + meta.color + '; emissiveIntensity: 0.55');
+    };
+    paint(r.strip);
+    paint(r.frame);
+    if (r.strips) r.strips.forEach(paint);
+
+    var title, body, sub;
+    if (st === 'available') {
+      title = 'DISEWAKAN';
+      body = u.area + ' M2  |  ' + shortRp(u.monthly) + ' / BULAN\n' + u.cat.toUpperCase() + '\nKLIK UNTUK SEWA';
+      sub = 'TERSEDIA • ' + u.area + ' M2';
+    } else if (st === 'booked') {
+      var b = bookings[u.id];
+      title = 'DIPESAN';
+      body = (b && b.brand ? b.brand.toUpperCase() : 'PESANAN ANDA') + '\n' + (b ? b.months + ' BULAN' : '') + '\nMENUNGGU VERIFIKASI';
+      sub = 'DIPESAN • ' + u.cat.toUpperCase();
+    } else {
+      title = 'TENANT';
+      body = (u.tenant || '').toUpperCase() + '\n' + u.cat.toUpperCase();
+      sub = u.tenant ? u.tenant.toUpperCase() : '';
+    }
+    if (r.boardTitle) { r.boardTitle.setAttribute('value', title); r.boardTitle.setAttribute('color', meta.color); }
+    if (r.boardBody) r.boardBody.setAttribute('value', body);
+    if (r.sub) r.sub.setAttribute('value', sub);
+    if (r.wallText) r.wallText.setAttribute('value', st === 'rented'
+      ? (u.tenant || '').toUpperCase()
+      : (st === 'booked' ? 'SEGERA DIBUKA' : 'AREA SIAP PAKAI\n' + u.area + ' M2'));
+    if (r.name2) r.name2.setAttribute('value', u.name);
+  }
+
+  /* --------------------- kontrol jalan kaki + tabrakan ---------------------- */
+  window.JOY = { x: 0, y: 0 };
+  var controls = null;    // instance komponen jalan kaki
+  AFRAME.registerComponent('mall-controls', {
+    init: function () {
+      this.prev = new THREE.Vector3(0, 1.6, 28);
+      this.radius = 0.4;
+      controls = this;
+    },
+    // pindah ke satu titik, pastikan tidak berakhir di dalam objek
+    place: function (x, z) {
+      var p = this.el.object3D.position;
+      p.set(x, 1.6, z);
+      this.clamp(p);
+      if (this.inside(p.x, p.z)) this.pushOut(p);
+      this.clamp(p);
+      this.prev.set(p.x, 1.6, p.z);
+    },
+    inside: function (x, z) {
+      var r = this.radius;
+      for (var i = 0; i < COLLIDERS.length; i++) {
+        var c = COLLIDERS[i];
+        if (x > c.x1 - r && x < c.x2 + r && z > c.z1 - r && z < c.z2 + r) return true;
+      }
+      return false;
+    },
+    clamp: function (p) {
+      var m = 0.45;
+      p.x = Math.max(MALL.minX + m, Math.min(MALL.maxX - m, p.x));
+      p.z = Math.max(MALL.minZ + m, Math.min(MALL.maxZ - m, p.z));
+    },
+    // dipakai kalau pemain "nyangkut" di dalam objek (mis. teleport dari denah)
+    pushOut: function (p) {
+      var r = this.radius;
+      for (var i = 0; i < COLLIDERS.length; i++) {
+        var c = COLLIDERS[i];
+        var x1 = c.x1 - r, x2 = c.x2 + r, z1 = c.z1 - r, z2 = c.z2 + r;
+        if (p.x > x1 && p.x < x2 && p.z > z1 && p.z < z2) {
+          var dL = p.x - x1, dR = x2 - p.x, dB = p.z - z1, dT = z2 - p.z;
+          var min = Math.min(dL, dR, dB, dT);
+          if (min === dL) p.x = x1; else if (min === dR) p.x = x2;
+          else if (min === dB) p.z = z1; else p.z = z2;
+        }
+      }
+    },
+    tick: function (time, delta) {
+      var p = this.el.object3D.position;
+      var dt = Math.min(delta || 16, 60) / 1000;
+      var prev = this.prev;
+
+      // gerak joystick (mobile)
+      if (window.JOY.x || window.JOY.y) {
+        var yaw = this.el.object3D.rotation.y;
+        var speed = 4.6 * dt, fwd = -window.JOY.y, str = window.JOY.x;
+        p.x += (-Math.sin(yaw) * fwd + Math.cos(yaw) * str) * speed;
+        p.z += (-Math.cos(yaw) * fwd - Math.sin(yaw) * str) * speed;
+      }
+      p.y = 1.6;
+      this.clamp(p);
+
+      if (this.inside(p.x, p.z)) {
+        if (!this.inside(prev.x, p.z)) p.x = prev.x;              // geser menyusuri dinding
+        else if (!this.inside(p.x, prev.z)) p.z = prev.z;
+        else if (!this.inside(prev.x, prev.z)) { p.x = prev.x; p.z = prev.z; }
+        else this.pushOut(p);                                      // terjebak -> dorong keluar
+        this.clamp(p);
+      }
+      if (!this.inside(p.x, p.z)) prev.set(p.x, 1.6, p.z);
+    }
+  });
+
+  /* --------------------------------- UI 2D ---------------------------------- */
+  var $ = function (s) { return document.querySelector(s); };
+  var listEl = $('#unitlist'), hintEl = $('#hint'), modalEl = $('#modal'), sheetEl = $('#sheet');
+
+  function showHint(html) { hintEl.innerHTML = html; hintEl.classList.add('show'); }
+  function hideHint() { hintEl.classList.remove('show'); }
+
+  function toast(msg, kind) {
+    var t = document.createElement('div');
+    t.className = 'toast ' + (kind || '');
+    t.innerHTML = msg;
+    $('#toasts').appendChild(t);
+    setTimeout(function () { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 3200);
+    setTimeout(function () { t.remove(); }, 3600);
+  }
+
+  function renderStats() {
+    var a = 0, b = 0, r = 0;
+    UNITS.forEach(function (u) { var s = statusOf(u); if (s === 'available') a++; else if (s === 'booked') b++; else r++; });
+    $('#st-total').textContent = UNITS.length;
+    $('#st-avail').textContent = a;
+    $('#st-booked').textContent = b;
+    $('#st-rented').textContent = r;
+    $('#st-occ').textContent = Math.round(((b + r) / UNITS.length) * 100) + '%';
+  }
+
+  function renderList() {
+    var q = searchTerm.trim().toLowerCase();
+    var rows = UNITS.filter(function (u) {
+      var st = statusOf(u);
+      if (activeFilter !== 'all' && st !== activeFilter) return false;
+      if (!q) return true;
+      var hay = (u.id + ' ' + u.name + ' ' + u.cat + ' ' + (u.tenant || '') + ' ' + u.tagline).toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+    listEl.innerHTML = '';
+    if (!rows.length) {
+      listEl.innerHTML = '<div class="empty">Tidak ada space yang cocok dengan filter ini.</div>';
+      return;
+    }
+    rows.forEach(function (u) {
+      var st = statusOf(u), meta = STATUS[st];
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        '<div class="row"><h3>' + u.name + '</h3><span class="badge ' + st + '">' + meta.label + '</span></div>' +
+        '<div class="cat">' + u.cat + (u.tenant && st === 'rented' ? ' &middot; ' + u.tenant : '') + '</div>' +
+        '<div class="price">' + shortRp(u.monthly) + ' <small>/ bulan</small></div>' +
+        '<div class="meta">' + u.width + ' &times; ' + u.depth + ' m &middot; ' + u.area + ' m&sup2; &middot; ' + u.tagline + '</div>' +
+        '<div class="acts">' +
+          '<button class="btn ghost" data-go="' + u.id + '">Kunjungi</button>' +
+          '<button class="btn ' + (st === 'available' ? 'primary' : 'ghost') + '" data-open="' + u.id + '">' +
+            (st === 'available' ? 'Sewa' : 'Detail') + '</button>' +
+        '</div>';
+      listEl.appendChild(card);
+    });
+  }
+
+  listEl.addEventListener('click', function (ev) {
+    var go = ev.target.getAttribute && ev.target.getAttribute('data-go');
+    var op = ev.target.getAttribute && ev.target.getAttribute('data-open');
+    if (go) gotoUnit(go);
+    if (op) openUnit(op);
+  });
+
+  /* ------------------------------- teleportasi ------------------------------ */
+  function gotoUnit(id) {
+    var u = BY_ID[id], cam = $('#cam');
+    if (!u || !cam) return;
+    var px, pz;
+    if (u.kind === 'shop') {
+      pz = u.cz;
+      px = u.front + u.facing * 4.2;
+      if (controls) {                                   // cari jarak berdiri yang tidak terhalang
+        var offsets = [4.2, 3.2, 5.4, 2.6, 6.2];
+        for (var i = 0; i < offsets.length; i++) {
+          var cand = u.front + u.facing * offsets[i];
+          if (!controls.inside(cand, pz)) { px = cand; break; }
+        }
+      }
+    } else { px = 0; pz = u.cz + 6.2; }
+    if (controls) controls.place(px, pz); else cam.object3D.position.set(px, 1.6, pz);
+    px = cam.object3D.position.x; pz = cam.object3D.position.z;
+    var dx = u.cx - px, dz = u.cz - pz;
+    var lc = cam.components['look-controls'];
+    if (lc) { lc.yawObject.rotation.y = Math.atan2(-dx, -dz); lc.pitchObject.rotation.x = 0; }
+    if (window.matchMedia('(max-width: 820px)').matches) $('#sidebar').classList.add('hidden');
+    toast('Kamu dipindahkan ke depan <b>' + u.name + '</b>');
+  }
+
+  /* ---------------------------- panel detail unit --------------------------- */
+  var CATEGORY_OPTIONS = ['Food & Beverage', 'Fashion & Apparel', 'Elektronik & Gadget', 'Kecantikan & Spa',
+    'Sport & Wellness', 'Anak & Mainan', 'Buku & Hobi', 'Home & Living', 'Jasa & Layanan', 'Otomotif', 'Lainnya'];
+
+  function openUnit(id) {
+    var u = BY_ID[id];
+    if (!u) return;
+    var st = statusOf(u), meta = STATUS[st];
+    var facil = u.facilities.map(function (f) { return '<em>' + f + '</em>'; }).join('');
+    var head =
+      '<div class="sheet-head">' +
+        '<div style="flex:1">' +
+          '<h2>' + u.name + ' <span class="badge ' + st + '">' + meta.label + '</span></h2>' +
+          '<p>' + u.cat + ' &middot; ' + u.tagline + '</p>' +
+        '</div>' +
+        '<button class="btn ghost" data-close>&times;</button>' +
+      '</div>';
+    var kv =
+      '<div class="kv">' +
+        '<div><span>Luas</span><b>' + u.area + ' m&sup2;</b></div>' +
+        '<div><span>Dimensi</span><b>' + u.width + ' &times; ' + u.depth + ' m</b></div>' +
+        '<div><span>Harga sewa</span><b>' + shortRp(u.monthly) + '<small style="font-weight:500;color:var(--muted)"> /bln</small></b></div>' +
+        '<div><span>Service charge</span><b>' + shortRp(u.service) + '<small style="font-weight:500;color:var(--muted)"> /bln</small></b></div>' +
+      '</div>' +
+      '<div class="facil">' + facil + '</div>';
+
+    var body;
+    if (st === 'available') {
+      body = kv + rentFormHTML(u);
+    } else if (st === 'booked') {
+      var b = bookings[u.id];
+      body = kv +
+        '<div class="summary">' +
+          '<div class="line"><span>Penyewa</span><b>' + esc(b.brand) + '</b></div>' +
+          '<div class="line"><span>Kategori usaha</span><b>' + esc(b.category) + '</b></div>' +
+          '<div class="line"><span>Kontak</span><b>' + esc(b.contact) + '</b></div>' +
+          '<div class="line"><span>Durasi</span><b>' + b.months + ' bulan</b></div>' +
+          '<div class="line"><span>Mulai</span><b>' + b.start + '</b></div>' +
+          '<div class="line"><span>Berakhir</span><b>' + b.end + '</b></div>' +
+          (b.note ? '<div class="line"><span>Catatan</span><b>' + esc(b.note) + '</b></div>' : '') +
+          '<div class="line total"><span>Total kontrak</span><b>' + rupiah(b.total) + '</b></div>' +
+        '</div>' +
+        '<p class="note">Pesanan tersimpan di perangkat ini. Tim leasing akan menghubungi kontak di atas untuk verifikasi dokumen dan penandatanganan kontrak.</p>';
+    } else {
+      body = kv +
+        '<div class="summary">' +
+          '<div class="line"><span>Tenant</span><b>' + esc(u.tenant) + '</b></div>' +
+          '<div class="line"><span>Status</span><b>Kontrak aktif</b></div>' +
+          '<div class="line"><span>Daftar tunggu</span><b>' + (waitlist[u.id] || 0) + ' calon penyewa</b></div>' +
+        '</div>' +
+        '<p class="note">Unit ini sedang disewa. Kamu bisa masuk daftar tunggu — kami kabari begitu unit kosong atau ada unit sejenis yang tersedia.</p>';
+    }
+
+    var foot;
+    if (st === 'available') {
+      foot = '<button class="btn ghost" data-go2="' + u.id + '">Kunjungi Unit</button>' +
+             '<button class="btn ghost" data-close>Tutup</button>' +
+             '<button class="btn primary" data-submit="' + u.id + '">Ajukan Sewa</button>';
+    } else if (st === 'booked') {
+      foot = '<button class="btn ghost" data-go2="' + u.id + '">Kunjungi Unit</button>' +
+             '<button class="btn danger" data-cancel="' + u.id + '">Batalkan Pesanan</button>' +
+             '<button class="btn ghost" data-close>Tutup</button>';
+    } else {
+      foot = '<button class="btn ghost" data-go2="' + u.id + '">Kunjungi Unit</button>' +
+             '<button class="btn primary" data-wait="' + u.id + '">Masuk Daftar Tunggu</button>' +
+             '<button class="btn ghost" data-close>Tutup</button>';
+    }
+
+    sheetEl.innerHTML = head + '<div class="sheet-body">' + body + '</div><div class="sheet-foot">' + foot + '</div>';
+    modalEl.classList.add('open');
+    if (st === 'available') bindForm(u);
+  }
+
+  function esc(s) {
+    return String(s === undefined || s === null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function rentFormHTML(u) {
+    var today = new Date();
+    var start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 14);
+    var iso = start.toISOString().slice(0, 10);
+    var cats = CATEGORY_OPTIONS.map(function (c) {
+      return '<option value="' + c + '"' + (c === u.cat ? ' selected' : '') + '>' + c + '</option>';
+    }).join('');
+    var months = [3, 6, 12, 24, 36].map(function (m) {
+      var d = DISCOUNTS[m];
+      return '<option value="' + m + '"' + (m === 12 ? ' selected' : '') + '>' + m + ' bulan' +
+        (d ? ' (diskon ' + Math.round(d * 100) + '%)' : '') + '</option>';
+    }).join('');
+    return '<form id="rent-form" autocomplete="off">' +
+      '<div class="f"><label for="f-brand">Nama brand / usaha *</label>' +
+        '<input id="f-brand" name="brand" required maxlength="60" placeholder="contoh: Kedai Rasa Nusantara"></div>' +
+      '<div class="grid2">' +
+        '<div class="f"><label for="f-cat">Kategori usaha</label><select id="f-cat" name="category">' + cats + '</select></div>' +
+        '<div class="f"><label for="f-contact">WhatsApp / Email *</label>' +
+          '<input id="f-contact" name="contact" required maxlength="80" placeholder="0812xxxxxxx / nama@email.com"></div>' +
+      '</div>' +
+      '<div class="grid2">' +
+        '<div class="f"><label for="f-months">Durasi sewa</label><select id="f-months" name="months">' + months + '</select></div>' +
+        '<div class="f"><label for="f-start">Mulai sewa</label><input id="f-start" name="start" type="date" value="' + iso + '"></div>' +
+      '</div>' +
+      '<div class="f"><label for="f-note">Catatan kebutuhan (opsional)</label>' +
+        '<textarea id="f-note" name="note" maxlength="240" placeholder="contoh: butuh saluran air + exhaust untuk dapur"></textarea></div>' +
+      '<div class="summary" id="f-summary"></div>' +
+      '<p class="note">Dengan mengajukan sewa, unit langsung ditandai <b>Dipesan</b> di denah mall. Pesanan disimpan lokal di browser ini (demo leasing) dan bisa dibatalkan kapan saja.</p>' +
+    '</form>';
+  }
+
+  function calcRent(u, months) {
+    var disc = DISCOUNTS[months] || 0;
+    var perMonth = u.monthly + u.service;
+    var subtotal = perMonth * months;
+    var discount = Math.round(subtotal * disc);
+    return {
+      months: months, perMonth: perMonth, subtotal: subtotal, disc: disc, discount: discount,
+      total: subtotal - discount, deposit: u.monthly * DEPOSIT_MONTHS
+    };
+  }
+
+  function addMonths(iso, months) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) d = new Date();
+    var day = d.getDate();
+    d.setMonth(d.getMonth() + months);
+    if (d.getDate() !== day) d.setDate(0);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function bindForm(u) {
+    var form = $('#rent-form'), sum = $('#f-summary');
+    function refresh() {
+      var months = parseInt(form.months.value, 10) || 12;
+      var c = calcRent(u, months);
+      sum.innerHTML =
+        '<div class="line"><span>Sewa ' + shortRp(u.monthly) + ' + service ' + shortRp(u.service) + '</span><b>' + rupiah(c.perMonth) + ' / bln</b></div>' +
+        '<div class="line"><span>Durasi</span><b>' + months + ' bulan</b></div>' +
+        (c.disc ? '<div class="line"><span>Diskon kontrak panjang</span><b>- ' + rupiah(c.discount) + '</b></div>' : '') +
+        '<div class="line"><span>Deposit (' + DEPOSIT_MONTHS + ' bln, dikembalikan)</span><b>' + rupiah(c.deposit) + '</b></div>' +
+        '<div class="line"><span>Kontrak berakhir</span><b>' + addMonths(form.start.value, months) + '</b></div>' +
+        '<div class="line total"><span>Total kontrak</span><b>' + rupiah(c.total) + '</b></div>';
+    }
+    form.addEventListener('input', refresh);
+    form.addEventListener('change', refresh);
+    form.addEventListener('submit', function (e) { e.preventDefault(); submitRent(u.id); });
+    refresh();
+  }
+
+  function submitRent(id) {
+    var u = BY_ID[id], form = $('#rent-form');
+    if (!u || !form) return;
+    if (!form.reportValidity()) return;
+    var months = parseInt(form.months.value, 10) || 12;
+    var c = calcRent(u, months);
+    var start = form.start.value || new Date().toISOString().slice(0, 10);
+    bookings[u.id] = {
+      unit: u.id, unitName: u.name, brand: form.brand.value.trim(), category: form.category.value,
+      contact: form.contact.value.trim(), months: months, start: start, end: addMonths(start, months),
+      note: form.note.value.trim(), area: u.area, monthly: u.monthly, service: u.service,
+      deposit: c.deposit, total: c.total, createdAt: new Date().toISOString()
+    };
+    saveJSON(LS_KEY, bookings);
+    updateUnitVisual(u); renderList(); renderStats(); drawMap();
+    modalEl.classList.remove('open');
+    toast('Pengajuan sewa <b>' + u.name + '</b> tersimpan. Total ' + rupiah(c.total) + ' untuk ' + months + ' bulan.', 'good');
+  }
+
+  function cancelBooking(id) {
+    var u = BY_ID[id];
+    if (!u || !bookings[id]) return;
+    if (!window.confirm('Batalkan pesanan untuk ' + u.name + '?')) return;
+    delete bookings[id];
+    saveJSON(LS_KEY, bookings);
+    updateUnitVisual(u); renderList(); renderStats(); drawMap();
+    modalEl.classList.remove('open');
+    toast('Pesanan ' + u.name + ' dibatalkan. Unit kembali tersedia.', 'warn');
+  }
+
+  modalEl.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (t === modalEl || (t.hasAttribute && t.hasAttribute('data-close'))) { modalEl.classList.remove('open'); return; }
+    if (!t.getAttribute) return;
+    var sub = t.getAttribute('data-submit'), can = t.getAttribute('data-cancel'),
+        go = t.getAttribute('data-go2'), wait = t.getAttribute('data-wait');
+    if (sub) submitRent(sub);
+    if (can) cancelBooking(can);
+    if (go) { modalEl.classList.remove('open'); gotoUnit(go); }
+    if (wait) {
+      waitlist[wait] = (waitlist[wait] || 0) + 1;
+      saveJSON(LS_WAIT, waitlist);
+      modalEl.classList.remove('open');
+      toast('Kamu masuk daftar tunggu ' + BY_ID[wait].name + '.', 'good');
+    }
+  });
+
+  /* --------------------------------- denah ---------------------------------- */
+  var canvas = $('#minimap'), ctx = canvas.getContext('2d');
+  function mapScale() {
+    return { sx: canvas.width / (MALL.maxX - MALL.minX), sz: canvas.height / (MALL.maxZ - MALL.minZ) };
+  }
+  function toMap(x, z) {
+    var s = mapScale();
+    return [(x - MALL.minX) * s.sx, (z - MALL.minZ) * s.sz];
+  }
+  function drawMap() {
+    var s = mapScale();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // lantai + koridor
+    ctx.fillStyle = 'rgba(255,255,255,.05)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(255,255,255,.10)';
+    var c1 = toMap(FRONT_L, MALL.minZ);
+    ctx.fillRect(c1[0], 0, (FRONT_R - FRONT_L) * s.sx, canvas.height);
+    // unit
+    UNITS.forEach(function (u) {
+      var st = statusOf(u), meta = STATUS[st];
+      var p = toMap(u.cx - u.dx / 2, u.cz - u.dz / 2);
+      ctx.fillStyle = meta.color;
+      ctx.globalAlpha = 0.78;
+      ctx.fillRect(p[0], p[1], u.dx * s.sx, u.dz * s.sz);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(0,0,0,.35)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(p[0] + .5, p[1] + .5, u.dx * s.sx - 1, u.dz * s.sz - 1);
+      if (u.kind === 'shop') {
+        ctx.fillStyle = 'rgba(10,12,18,.85)';
+        ctx.font = '700 8px system-ui, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(u.id, p[0] + (u.dx * s.sx) / 2, p[1] + (u.dz * s.sz) / 2);
+      }
+    });
+    // air mancur
+    var f = toMap(0, 0);
+    ctx.fillStyle = 'rgba(126,200,239,.8)';
+    ctx.beginPath(); ctx.arc(f[0], f[1], 2.6 * s.sx, 0, Math.PI * 2); ctx.fill();
+    // pintu masuk
+    var en = toMap(-6, MALL.maxZ - 0.6);
+    ctx.fillStyle = '#ffb020';
+    ctx.fillRect(en[0], en[1], 12 * s.sx, 2);
+    // pemain
+    var cam = $('#cam');
+    if (cam && cam.object3D) {
+      var pos = cam.object3D.position, yaw = cam.object3D.rotation.y;
+      var pp = toMap(pos.x, pos.z);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(pp[0], pp[1]);
+      ctx.lineTo(pp[0] - Math.sin(yaw) * 12, pp[1] - Math.cos(yaw) * 12);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(pp[0], pp[1], 3.4, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#0b0d12'; ctx.lineWidth = 1; ctx.stroke();
+      $('#map-pos').textContent = Math.round(pos.x) + ', ' + Math.round(pos.z);
+    }
+  }
+  canvas.addEventListener('click', function (ev) {
+    var rect = canvas.getBoundingClientRect();
+    var s = mapScale();
+    var x = MALL.minX + ((ev.clientX - rect.left) / rect.width) * canvas.width / s.sx;
+    var z = MALL.minZ + ((ev.clientY - rect.top) / rect.height) * canvas.height / s.sz;
+    var cam = $('#cam');
+    if (!cam) return;
+    if (controls) controls.place(x, z); else cam.object3D.position.set(x, 1.6, z);
+    toast('Berpindah ke titik ' + Math.round(cam.object3D.position.x) + ', ' + Math.round(cam.object3D.position.z));
+  });
+
+  /* -------------------------------- joystick -------------------------------- */
+  function initJoystick() {
+    var joy = $('#joy'), knob = joy.querySelector('.knob'), id = null, R = 44;
+    function set(dx, dy) {
+      var d = Math.hypot(dx, dy);
+      if (d > R) { dx = dx / d * R; dy = dy / d * R; }
+      knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+      window.JOY.x = dx / R; window.JOY.y = dy / R;
+    }
+    function reset() { id = null; knob.style.transform = ''; window.JOY.x = 0; window.JOY.y = 0; }
+    joy.addEventListener('pointerdown', function (e) {
+      id = e.pointerId; joy.setPointerCapture(id);
+      var r = joy.getBoundingClientRect();
+      set(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+    });
+    joy.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== id) return;
+      var r = joy.getBoundingClientRect();
+      set(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (evt) {
+      joy.addEventListener(evt, function (e) { if (e.pointerId === id) reset(); });
+    });
+  }
+
+  /* ------------------------------ ekspor / reset ---------------------------- */
+  function exportBookings() {
+    var rows = Object.keys(bookings).map(function (k) { return bookings[k]; });
+    if (!rows.length) { toast('Belum ada pesanan untuk diekspor.', 'warn'); return; }
+    var payload = {
+      mall: 'Wolfpup Virtual Mall', floor: 'Ground Floor',
+      exportedAt: new Date().toISOString(), currency: 'IDR', bookings: rows
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'pesanan-sewa-mall.json';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    toast('Mengunduh ' + rows.length + ' pesanan.', 'good');
+  }
+
+  function resetBookings() {
+    if (!Object.keys(bookings).length) { toast('Belum ada pesanan tersimpan.', 'warn'); return; }
+    if (!window.confirm('Hapus semua pesanan sewa yang tersimpan di browser ini?')) return;
+    bookings = {};
+    saveJSON(LS_KEY, bookings);
+    UNITS.forEach(updateUnitVisual);
+    renderList(); renderStats(); drawMap();
+    toast('Semua pesanan dihapus.', 'warn');
+  }
+
+  /* --------------------------------- init ----------------------------------- */
+  function initUI() {
+    $('#btn-list').addEventListener('click', function () { $('#sidebar').classList.toggle('hidden'); });
+    $('#btn-map').addEventListener('click', function () { $('#mapwrap').classList.toggle('hidden'); });
+    $('#btn-help').addEventListener('click', function () { $('#welcome').style.display = 'grid'; });
+    $('#btn-enter').addEventListener('click', function () { $('#welcome').style.display = 'none'; });
+    $('#btn-export').addEventListener('click', exportBookings);
+    $('#btn-reset').addEventListener('click', resetBookings);
+    $('#search').addEventListener('input', function (e) { searchTerm = e.target.value; renderList(); });
+    $('#filters').addEventListener('click', function (e) {
+      var f = e.target.getAttribute && e.target.getAttribute('data-filter');
+      if (!f) return;
+      activeFilter = f;
+      Array.prototype.forEach.call(this.querySelectorAll('.chip'), function (c) {
+        c.setAttribute('aria-pressed', String(c.getAttribute('data-filter') === f));
+      });
+      renderList();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      var t = e.target.tagName;
+      if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+      var k = e.key.toLowerCase();
+      if (k === 'escape') {
+        if (modalEl.classList.contains('open')) modalEl.classList.remove('open');
+        else if ($('#welcome').style.display !== 'none') $('#welcome').style.display = 'none';
+      } else if (k === 'e' && hovered) { openUnit(hovered.id); }
+      else if (k === 'm') { $('#mapwrap').classList.toggle('hidden'); }
+      else if (k === 'l') { $('#sidebar').classList.toggle('hidden'); }
+    });
+
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      document.body.classList.add('touch');
+      initJoystick();
+    }
+    if (window.matchMedia('(max-width: 820px)').matches) $('#sidebar').classList.add('hidden');
+  }
+
+  function loop() {
+    drawMap();
+    setTimeout(function () { requestAnimationFrame(loop); }, 60);
+  }
+
+  function init() {
+    buildData();
+    buildStructure();
+    buildUnits();
+    initUI();
+    renderList();
+    renderStats();
+    // pastikan komponen jalan kaki aktif (didaftarkan setelah scene di-parse)
+    var cam = document.getElementById('cam');
+    if (cam) cam.setAttribute('mall-controls', '');
+    loop();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>
