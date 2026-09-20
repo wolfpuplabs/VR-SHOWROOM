@@ -6,6 +6,7 @@
 <meta name="description" content="Virtual mall 3D yang bisa dijelajahi dengan space / unit ritel yang bisa disewa secara online.">
 <title>Wolfpup Virtual Mall — Sewa Space Ritel</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 <style>
   :root{
     --bg:#0b0d12;
@@ -36,8 +37,12 @@
   #ui .pe{pointer-events:auto}
 
   /* ---------- top bar ---------- */
-  #topbar{display:flex;align-items:center;gap:14px;padding:10px 14px;
+  #topbar{position:relative;z-index:5;display:flex;align-items:center;gap:14px;padding:10px 14px;
     background:linear-gradient(180deg,rgba(8,10,15,.92),rgba(8,10,15,0));}
+  /* bidang kosong topbar tidak boleh menelan klik panel di bawahnya */
+  #topbar.pe{pointer-events:none}
+  #topbar > *{pointer-events:auto}
+  #stats{pointer-events:none}
   .brand{display:flex;align-items:center;gap:10px;min-width:0}
   .brand .mark{width:34px;height:34px;border-radius:10px;flex:0 0 auto;
     background:linear-gradient(135deg,var(--brand),var(--brand-2));
@@ -60,7 +65,7 @@
   .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
 
   /* ---------- sidebar ---------- */
-  #sidebar{position:absolute;top:64px;left:14px;bottom:14px;width:328px;max-width:calc(100vw - 28px);
+  #sidebar{position:absolute;z-index:3;top:64px;left:14px;bottom:14px;width:328px;max-width:calc(100vw - 28px);
     background:var(--panel);border:1px solid var(--stroke);border-radius:var(--radius);
     box-shadow:var(--shadow);backdrop-filter:blur(16px);display:flex;flex-direction:column;overflow:hidden;
     transition:transform .25s ease,opacity .25s ease}
@@ -95,7 +100,7 @@
   .empty{color:var(--muted);font-size:12.5px;text-align:center;padding:24px 8px}
 
   /* ---------- minimap ---------- */
-  #mapwrap{position:absolute;right:14px;bottom:14px;background:var(--panel);border:1px solid var(--stroke);
+  #mapwrap{position:absolute;z-index:3;right:14px;bottom:14px;background:var(--panel);border:1px solid var(--stroke);
     border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(16px);padding:9px;
     transition:transform .25s ease,opacity .25s ease}
   #mapwrap.hidden{transform:translateY(130%);opacity:0;pointer-events:none}
@@ -104,7 +109,7 @@
   #minimap{display:block;border-radius:8px;background:rgba(0,0,0,.35)}
 
   /* ---------- gaze hint ---------- */
-  #hint{position:absolute;left:50%;top:calc(50% + 42px);transform:translateX(-50%);
+  #hint{position:absolute;z-index:4;left:50%;top:calc(50% + 42px);transform:translateX(-50%);
     background:rgba(8,10,15,.86);border:1px solid var(--stroke);border-radius:10px;padding:7px 12px;
     font-size:12.5px;white-space:nowrap;opacity:0;transition:opacity .15s;backdrop-filter:blur(8px)}
   #hint.show{opacity:1}
@@ -113,9 +118,9 @@
     border-radius:5px;padding:1px 5px;font-size:10.5px;font-family:ui-monospace,Menlo,Consolas,monospace}
 
   /* ---------- modal ---------- */
-  #modal{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:16px;
+  #modal,#pmodal{position:absolute;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;
     background:rgba(4,6,10,.62);backdrop-filter:blur(4px)}
-  #modal.open{display:flex}
+  #modal.open,#pmodal.open{display:flex}
   .sheet{width:min(560px,100%);max-height:min(86vh,760px);overflow-y:auto;background:var(--panel-solid);
     border:1px solid var(--stroke);border-radius:18px;box-shadow:var(--shadow)}
   .sheet-head{padding:16px 18px;border-bottom:1px solid var(--stroke);display:flex;gap:12px;align-items:flex-start}
@@ -147,7 +152,7 @@
   .note{font-size:11.5px;color:var(--muted);line-height:1.5}
 
   /* ---------- toast ---------- */
-  #toasts{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;
+  #toasts{position:absolute;z-index:55;left:50%;bottom:22px;transform:translateX(-50%);display:flex;
     flex-direction:column;gap:8px;align-items:center;width:max-content;max-width:92vw}
   .toast{background:var(--panel-solid);border:1px solid var(--stroke-strong);border-radius:12px;
     padding:10px 14px;font-size:13px;box-shadow:var(--shadow);animation:pop .25s ease}
@@ -156,14 +161,14 @@
   @keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
   /* ---------- joystick ---------- */
-  #joy{position:absolute;left:18px;bottom:18px;width:124px;height:124px;border-radius:50%;
+  #joy{position:absolute;z-index:4;left:18px;bottom:18px;width:124px;height:124px;border-radius:50%;
     border:1px solid var(--stroke);background:rgba(16,19,27,.5);display:none;touch-action:none}
   #joy .knob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;
     background:linear-gradient(135deg,var(--brand),var(--brand-2));opacity:.85}
   body.touch #joy{display:block}
 
   /* ---------- welcome ---------- */
-  #welcome{position:absolute;inset:0;display:grid;place-items:center;padding:16px;
+  #welcome{position:absolute;z-index:60;inset:0;display:grid;place-items:center;padding:16px;
     background:radial-gradient(1200px 600px at 50% 0%,rgba(255,176,32,.10),transparent 60%),rgba(4,6,10,.86)}
   #welcome .sheet{max-width:520px;text-align:left}
   #welcome ul{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.75}
@@ -171,13 +176,41 @@
   .legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
   .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
 
+  /* ---------- language toggle ---------- */
+  .seg{display:flex;background:var(--panel);border:1px solid var(--stroke);border-radius:11px;overflow:hidden;backdrop-filter:blur(12px)}
+  .seg button{font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.04em;color:var(--muted);
+    background:transparent;border:0;padding:8px 10px;cursor:pointer;transition:.15s}
+  .seg button[aria-pressed="true"]{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#241500}
+
+  /* ---------- sidebar tabs ---------- */
+  .tabs{display:flex;gap:6px;margin-bottom:9px}
+  .tabs button{flex:1;font:inherit;font-size:12px;font-weight:700;padding:7px 8px;border-radius:10px;cursor:pointer;
+    color:var(--muted);background:rgba(255,255,255,.04);border:1px solid var(--stroke);transition:.15s}
+  .tabs button[aria-pressed="true"]{color:var(--text);background:rgba(255,176,32,.16);border-color:rgba(255,176,32,.45)}
+  .card .shop{font-size:11px;color:var(--muted)}
+  .card .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
+
+  /* ---------- product / AR sheet ---------- */
+  model-viewer{width:100%;height:min(46vh,340px);background:linear-gradient(180deg,#171b26,#0e1118);
+    border-radius:14px;border:1px solid var(--stroke);--poster-color:transparent}
+  .ar-btn{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);white-space:nowrap;
+    background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#241500;border:0;border-radius:999px;
+    font:inherit;font-size:13px;font-weight:700;padding:10px 18px;cursor:pointer;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+  .mv-wrap{position:relative;margin-bottom:14px}
+  .mv-note{font-size:11.5px;color:var(--muted);margin:8px 2px 0;line-height:1.5}
+  .price-big{font-size:22px;font-weight:800;color:var(--brand);margin:2px 0 10px}
+  .price-big small{font-size:12px;font-weight:500;color:var(--muted)}
+
   @media (max-width:820px){
     #topbar{flex-wrap:wrap;gap:8px;padding:8px 10px}
     .brand{order:1} .brand small{display:none} .brand h1{line-height:1.3}
     .brand .mark{width:30px;height:30px;border-radius:9px;font-size:14px}
     .btn{order:2;padding:6px 9px;font-size:11.5px}
-    #stats{order:3;width:100%;margin-left:0;justify-content:flex-start;flex-wrap:nowrap;
+    #topbar::after{content:'';flex-basis:100%;height:0;order:3}   /* paksa baris kedua */
+    #stats{order:5;flex:1 1 0;min-width:0;width:auto;margin-left:0;justify-content:flex-start;flex-wrap:nowrap;
       overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .seg{order:4;flex:0 0 auto}
+    .seg button{padding:7px 9px;font-size:11px}
     #stats::-webkit-scrollbar{display:none}
     #stats .stat{min-width:60px;padding:5px 9px;flex:0 0 auto}
     #stats .stat b{font-size:14px}
@@ -202,41 +235,48 @@
       <div class="mark">W</div>
       <div>
         <h1>Wolfpup Virtual Mall</h1>
-        <small>Lantai Dasar &middot; Leasing Center</small>
+        <small data-i18n="brand.sub">Ground Floor &middot; Leasing Center</small>
       </div>
     </div>
     <div id="stats">
-      <div class="stat"><b id="st-total">0</b><span>Unit</span></div>
-      <div class="stat ok"><b id="st-avail">0</b><span>Tersedia</span></div>
-      <div class="stat book"><b id="st-booked">0</b><span>Dipesan</span></div>
-      <div class="stat rent"><b id="st-rented">0</b><span>Disewa</span></div>
-      <div class="stat"><b id="st-occ">0%</b><span>Okupansi</span></div>
+      <div class="stat"><b id="st-total">0</b><span data-i18n="stat.units">Units</span></div>
+      <div class="stat ok"><b id="st-avail">0</b><span data-i18n="stat.available">Available</span></div>
+      <div class="stat book"><b id="st-booked">0</b><span data-i18n="stat.reserved">Reserved</span></div>
+      <div class="stat rent"><b id="st-rented">0</b><span data-i18n="stat.leased">Leased</span></div>
+      <div class="stat"><b id="st-occ">0%</b><span data-i18n="stat.occupancy">Occupancy</span></div>
     </div>
-    <button class="btn ghost" id="btn-list" title="Tampilkan / sembunyikan daftar space">Daftar Space</button>
-    <button class="btn ghost" id="btn-map" title="Tampilkan / sembunyikan peta">Peta</button>
-    <button class="btn ghost" id="btn-help" title="Kontrol &amp; bantuan">?</button>
+    <div class="seg pe" id="langseg">
+      <button data-lang="en" aria-pressed="true">EN</button>
+      <button data-lang="id" aria-pressed="false">ID</button>
+    </div>
+    <button class="btn ghost" id="btn-list" data-i18n="btn.directory">Directory</button>
+    <button class="btn ghost" id="btn-map" data-i18n="btn.map">Map</button>
+    <button class="btn ghost" id="btn-help">?</button>
   </div>
 
   <aside id="sidebar" class="pe">
     <div class="side-head">
-      <h2>Space yang tersedia</h2>
-      <input id="search" type="search" placeholder="Cari unit, kategori, atau tenant…" autocomplete="off">
+      <div class="tabs" id="tabs">
+        <button data-tab="spaces" aria-pressed="true" data-i18n="tab.spaces">Spaces for rent</button>
+        <button data-tab="products" aria-pressed="false" data-i18n="tab.products">Products</button>
+      </div>
+      <input id="search" type="search" data-i18n-placeholder="search.spaces" placeholder="Search unit, category, or tenant…" autocomplete="off">
       <div class="chips" id="filters">
-        <button class="chip" data-filter="all" aria-pressed="true">Semua</button>
-        <button class="chip" data-filter="available" aria-pressed="false">Tersedia</button>
-        <button class="chip" data-filter="booked" aria-pressed="false">Dipesan</button>
-        <button class="chip" data-filter="rented" aria-pressed="false">Disewa</button>
+        <button class="chip" data-filter="all" aria-pressed="true" data-i18n="filter.all">All</button>
+        <button class="chip" data-filter="available" aria-pressed="false" data-i18n="filter.available">Available</button>
+        <button class="chip" data-filter="booked" aria-pressed="false" data-i18n="filter.booked">Reserved</button>
+        <button class="chip" data-filter="rented" aria-pressed="false" data-i18n="filter.rented">Leased</button>
       </div>
     </div>
     <div id="unitlist"></div>
-    <div style="padding:10px;border-top:1px solid var(--stroke);display:flex;gap:8px">
-      <button class="btn ghost" id="btn-export" style="flex:1">Ekspor Pesanan</button>
-      <button class="btn ghost" id="btn-reset" style="flex:1">Reset Pesanan</button>
+    <div id="side-foot" style="padding:10px;border-top:1px solid var(--stroke);display:flex;gap:8px">
+      <button class="btn ghost" id="btn-export" style="flex:1" data-i18n="btn.export">Export bookings</button>
+      <button class="btn ghost" id="btn-reset" style="flex:1" data-i18n="btn.reset">Reset bookings</button>
     </div>
   </aside>
 
   <div id="mapwrap" class="pe">
-    <div class="cap"><span>Denah</span><span id="map-pos">0, 0</span></div>
+    <div class="cap"><span data-i18n="map.title">Floor plan</span><span id="map-pos">0, 0</span></div>
     <canvas id="minimap" width="150" height="205"></canvas>
   </div>
 
@@ -249,31 +289,30 @@
     <div class="sheet" id="sheet"></div>
   </div>
 
+  <!-- product showcase + AR -->
+  <div id="pmodal" class="pe" role="dialog" aria-modal="true">
+    <div class="sheet" id="psheet"></div>
+  </div>
+
   <!-- welcome / controls -->
   <div id="welcome" class="pe">
     <div class="sheet">
       <div class="sheet-head">
         <div>
-          <h2>Selamat datang di Wolfpup Virtual Mall</h2>
-          <p>Mall 3D yang bisa kamu jelajahi sendiri — setiap unit kosong bisa langsung disewa.</p>
+          <h2 data-i18n="welcome.title">Welcome to Wolfpup Virtual Mall</h2>
+          <p data-i18n="welcome.sub">A 3D mall you can walk through — every empty unit is ready to rent, and every product can be viewed in AR.</p>
         </div>
       </div>
       <div class="sheet-body">
-        <ul>
-          <li><b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b> atau tombol panah untuk berjalan</li>
-          <li><b>Drag mouse</b> (atau geser layar) untuk melihat sekeliling</li>
-          <li>Arahkan crosshair ke etalase lalu <b>klik</b> — atau tekan <kbd>E</kbd> — untuk melihat detail &amp; menyewa</li>
-          <li>Di HP: gunakan <b>joystick</b> di kiri bawah untuk berjalan</li>
-          <li><kbd>M</kbd> peta &middot; <kbd>L</kbd> daftar space &middot; <kbd>Esc</kbd> tutup panel</li>
-        </ul>
+        <ul id="welcome-list"></ul>
         <div class="legend">
-          <span><i style="background:#36d399"></i>Tersedia</span>
-          <span><i style="background:#5aa9ff"></i>Dipesan (pesananmu)</span>
-          <span><i style="background:#ff5d7a"></i>Sudah disewa</span>
+          <span><i style="background:#36d399"></i><span data-i18n="legend.available">Available</span></span>
+          <span><i style="background:#5aa9ff"></i><span data-i18n="legend.booked">Reserved by you</span></span>
+          <span><i style="background:#ff5d7a"></i><span data-i18n="legend.rented">Leased</span></span>
         </div>
       </div>
       <div class="sheet-foot">
-        <button class="btn primary" id="btn-enter">Masuk ke Mall</button>
+        <button class="btn primary" id="btn-enter" data-i18n="btn.enter">Enter the mall</button>
       </div>
     </div>
   </div>
@@ -329,72 +368,381 @@
   var DEPOSIT_MONTHS = 3;
   var LS_KEY    = 'wolfpup-mall-bookings-v1';
   var LS_WAIT   = 'wolfpup-mall-waitlist-v1';
+  var LS_LANG   = 'wolfpup-mall-lang-v1';
 
   var STATUS = {
-    available: { label: 'Tersedia',  color: '#36d399', dim: '#1d7a5a' },
-    booked:    { label: 'Dipesan',   color: '#5aa9ff', dim: '#2f6bb0' },
-    rented:    { label: 'Disewa',    color: '#ff5d7a', dim: '#a33549' }
+    available: { color: '#36d399' },
+    booked:    { color: '#5aa9ff' },
+    rented:    { color: '#ff5d7a' }
   };
 
   var DISCOUNTS = { 3: 0, 6: 0.02, 12: 0.05, 24: 0.10, 36: 0.15 };
+
+  /* --------------------------------- bahasa --------------------------------- */
+  var STR = {
+    en: {
+      'brand.sub': 'Ground Floor · Leasing Center',
+      'stat.units': 'Units', 'stat.available': 'Available', 'stat.reserved': 'Reserved',
+      'stat.leased': 'Leased', 'stat.occupancy': 'Occupancy',
+      'btn.directory': 'Directory', 'btn.map': 'Map', 'btn.export': 'Export bookings',
+      'btn.reset': 'Reset bookings', 'btn.enter': 'Enter the mall',
+      'tab.spaces': 'Spaces for rent', 'tab.products': 'Products',
+      'search.spaces': 'Search unit, category, or tenant…',
+      'search.products': 'Search product, shop, or category…',
+      'filter.all': 'All', 'filter.available': 'Available', 'filter.booked': 'Reserved', 'filter.rented': 'Leased',
+      'map.title': 'Floor plan',
+      'welcome.title': 'Welcome to Wolfpup Virtual Mall',
+      'welcome.sub': 'A 3D mall you can walk through — every empty unit is ready to rent, and every product can be viewed in AR.',
+      'welcome.1': '<b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b> or the arrow keys to walk',
+      'welcome.2': '<b>Drag the mouse</b> (or swipe on a phone) to look around',
+      'welcome.3': 'Point the crosshair at a shop front and <b>click</b> — or press <kbd>E</kbd> — for details and to rent it',
+      'welcome.4': 'Walk inside a shop and click a product to open its 3D preview and <b>View in AR</b>',
+      'welcome.5': 'On a phone: use the <b>joystick</b> at the bottom left to walk',
+      'welcome.6': '<kbd>M</kbd> map · <kbd>L</kbd> directory · <kbd>Esc</kbd> close panel',
+      'legend.available': 'Available', 'legend.booked': 'Reserved by you', 'legend.rented': 'Leased',
+      'status.available': 'Available', 'status.booked': 'Reserved', 'status.rented': 'Leased',
+      'list.empty': 'No space matches this filter.',
+      'list.emptyProducts': 'No product matches this search.',
+      'card.visit': 'Visit', 'card.rent': 'Rent', 'card.details': 'Details', 'card.viewAr': 'View in AR',
+      'card.perMonth': '/ month', 'card.soldBy': 'at',
+      'sheet.area': 'Size', 'sheet.dims': 'Dimensions', 'sheet.rent': 'Base rent', 'sheet.service': 'Service charge',
+      'sheet.perMonthShort': '/mo', 'sheet.tenant': 'Tenant', 'sheet.statusLabel': 'Status',
+      'sheet.contractActive': 'Active contract', 'sheet.waitlist': 'Waiting list',
+      'sheet.waitlistUnit': 'prospective tenants',
+      'sheet.rentedNote': 'This unit is currently leased. Join the waiting list and we will let you know as soon as it frees up or a similar unit opens.',
+      'sheet.bookedNote': 'Your booking is stored on this device. Our leasing team will contact you to verify documents and sign the contract.',
+      'sheet.visitUnit': 'Visit unit', 'sheet.close': 'Close', 'sheet.submit': 'Request rental',
+      'sheet.cancel': 'Cancel booking', 'sheet.waitlistBtn': 'Join waiting list',
+      'sheet.products': 'Products in this shop',
+      'b.tenant': 'Tenant', 'b.category': 'Business category', 'b.contact': 'Contact', 'b.duration': 'Term',
+      'b.start': 'Start', 'b.end': 'Ends', 'b.note': 'Note', 'b.total': 'Contract total',
+      'form.brand': 'Brand / business name *', 'form.brandPh': 'e.g. Kedai Rasa Nusantara',
+      'form.category': 'Business category', 'form.contact': 'WhatsApp / email *',
+      'form.contactPh': '0812xxxxxxx / name@email.com',
+      'form.months': 'Rental term', 'form.start': 'Start date',
+      'form.note': 'Fit-out notes (optional)',
+      'form.notePh': 'e.g. needs a drain and exhaust for the kitchen',
+      'form.monthsUnit': 'months', 'form.discount': 'discount',
+      'sum.rentService': 'Rent {rent} + service {service}', 'sum.perMonth': '/ mo',
+      'sum.duration': 'Term', 'sum.discount': 'Long-term discount',
+      'sum.deposit': 'Deposit ({n} mo, refundable)', 'sum.end': 'Contract ends', 'sum.total': 'Contract total',
+      'form.disclaimer': 'Submitting marks the unit as <b>Reserved</b> on the floor plan right away. Bookings are stored locally in this browser (leasing demo) and can be cancelled any time.',
+      'p.price': 'Price', 'p.viewAr': 'View in AR', 'p.arUnsupported': 'Open this page on an Android or iOS phone to place the product in your room. On desktop you can still drag to inspect the 3D model.',
+      'p.arIos': 'On iPhone/iPad, AR needs a USDZ version of the model — not bundled in this demo.',
+      'p.visitShop': 'Visit the shop', 'p.soldBy': 'Sold by', 'p.specs': 'Details',
+      'p.mvFail': '3D preview could not load \u2014 check the connection to the model-viewer CDN.',
+      'p.buyNote': 'Checkout is not wired up yet — this build covers the showcase and AR preview.',
+      'hint.rentPrice': '{price}/mo — click to rent',
+      'hint.booked': 'Reserved by you — click for details',
+      'hint.rented': 'Leased to {tenant} — click for details',
+      'hint.product': '{name} · {price} — click for 3D & AR',
+      'hint.showroom': 'Open the Porsche showroom (other page)',
+      'toast.teleport': 'Moved to the front of <b>{name}</b>',
+      'toast.moved': 'Moved to {x}, {z}',
+      'toast.booked': 'Rental request for <b>{name}</b> saved. Total {total} for {months} months.',
+      'toast.cancelled': 'Booking for {name} cancelled. The unit is available again.',
+      'toast.waitlist': 'You joined the waiting list for {name}.',
+      'toast.exported': 'Downloading {n} booking(s).',
+      'toast.noBookings': 'No bookings to export yet.',
+      'toast.noBookings2': 'No bookings stored yet.',
+      'toast.reset': 'All bookings deleted.',
+      'toast.storage': 'This browser blocked local storage.',
+      'confirm.cancel': 'Cancel the booking for {name}?',
+      'confirm.reset': 'Delete every booking stored in this browser?',
+      'w3.entranceSub': 'MAIN ENTRANCE  •  GROUND FLOOR',
+      'w3.floor2': 'LEVEL 2  •  COMING SOON',
+      'w3.dirTitle': 'DIRECTORY\nGROUND FLOOR',
+      'w3.dirBody': 'BLOCK A  :  A1 - A7\nBLOCK B  :  B1 - B7\nKIOSKS   :  K1 - K4\n\nLeasing: click a shop\nfront to rent it',
+      'w3.forRent': 'FOR RENT', 'w3.reserved': 'RESERVED', 'w3.tenant': 'TENANT',
+      'w3.perMonth': '/ MONTH', 'w3.clickToRent': 'CLICK TO RENT',
+      'w3.yourBooking': 'YOUR BOOKING', 'w3.months': 'MONTHS', 'w3.awaiting': 'AWAITING VERIFICATION',
+      'w3.availableSub': 'AVAILABLE', 'w3.reservedSub': 'RESERVED',
+      'w3.readyToUse': 'READY-TO-FIT SPACE', 'w3.openingSoon': 'OPENING SOON',
+      'w3.openShowroom': 'OPEN VR SHOWROOM', 'w3.viewAr': 'VIEW IN AR'
+    },
+    id: {
+      'brand.sub': 'Lantai Dasar · Leasing Center',
+      'stat.units': 'Unit', 'stat.available': 'Tersedia', 'stat.reserved': 'Dipesan',
+      'stat.leased': 'Disewa', 'stat.occupancy': 'Okupansi',
+      'btn.directory': 'Daftar Space', 'btn.map': 'Peta', 'btn.export': 'Ekspor Pesanan',
+      'btn.reset': 'Reset Pesanan', 'btn.enter': 'Masuk ke Mall',
+      'tab.spaces': 'Space Disewakan', 'tab.products': 'Produk',
+      'search.spaces': 'Cari unit, kategori, atau tenant…',
+      'search.products': 'Cari produk, toko, atau kategori…',
+      'filter.all': 'Semua', 'filter.available': 'Tersedia', 'filter.booked': 'Dipesan', 'filter.rented': 'Disewa',
+      'map.title': 'Denah',
+      'welcome.title': 'Selamat datang di Wolfpup Virtual Mall',
+      'welcome.sub': 'Mall 3D yang bisa kamu jelajahi sendiri — unit kosong bisa langsung disewa, dan tiap produk bisa dilihat dengan AR.',
+      'welcome.1': '<b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b> atau tombol panah untuk berjalan',
+      'welcome.2': '<b>Drag mouse</b> (atau geser layar) untuk melihat sekeliling',
+      'welcome.3': 'Arahkan crosshair ke etalase lalu <b>klik</b> — atau tekan <kbd>E</kbd> — untuk detail &amp; menyewa',
+      'welcome.4': 'Masuk ke dalam toko lalu klik produk untuk pratinjau 3D dan <b>Lihat di AR</b>',
+      'welcome.5': 'Di HP: gunakan <b>joystick</b> di kiri bawah untuk berjalan',
+      'welcome.6': '<kbd>M</kbd> peta · <kbd>L</kbd> daftar space · <kbd>Esc</kbd> tutup panel',
+      'legend.available': 'Tersedia', 'legend.booked': 'Dipesan (pesananmu)', 'legend.rented': 'Sudah disewa',
+      'status.available': 'Tersedia', 'status.booked': 'Dipesan', 'status.rented': 'Disewa',
+      'list.empty': 'Tidak ada space yang cocok dengan filter ini.',
+      'list.emptyProducts': 'Tidak ada produk yang cocok dengan pencarian ini.',
+      'card.visit': 'Kunjungi', 'card.rent': 'Sewa', 'card.details': 'Detail', 'card.viewAr': 'Lihat di AR',
+      'card.perMonth': '/ bulan', 'card.soldBy': 'di',
+      'sheet.area': 'Luas', 'sheet.dims': 'Dimensi', 'sheet.rent': 'Harga sewa', 'sheet.service': 'Service charge',
+      'sheet.perMonthShort': '/bln', 'sheet.tenant': 'Tenant', 'sheet.statusLabel': 'Status',
+      'sheet.contractActive': 'Kontrak aktif', 'sheet.waitlist': 'Daftar tunggu',
+      'sheet.waitlistUnit': 'calon penyewa',
+      'sheet.rentedNote': 'Unit ini sedang disewa. Kamu bisa masuk daftar tunggu — kami kabari begitu unit kosong atau ada unit sejenis yang tersedia.',
+      'sheet.bookedNote': 'Pesanan tersimpan di perangkat ini. Tim leasing akan menghubungi kontak di atas untuk verifikasi dokumen dan penandatanganan kontrak.',
+      'sheet.visitUnit': 'Kunjungi Unit', 'sheet.close': 'Tutup', 'sheet.submit': 'Ajukan Sewa',
+      'sheet.cancel': 'Batalkan Pesanan', 'sheet.waitlistBtn': 'Masuk Daftar Tunggu',
+      'sheet.products': 'Produk di toko ini',
+      'b.tenant': 'Penyewa', 'b.category': 'Kategori usaha', 'b.contact': 'Kontak', 'b.duration': 'Durasi',
+      'b.start': 'Mulai', 'b.end': 'Berakhir', 'b.note': 'Catatan', 'b.total': 'Total kontrak',
+      'form.brand': 'Nama brand / usaha *', 'form.brandPh': 'contoh: Kedai Rasa Nusantara',
+      'form.category': 'Kategori usaha', 'form.contact': 'WhatsApp / Email *',
+      'form.contactPh': '0812xxxxxxx / nama@email.com',
+      'form.months': 'Durasi sewa', 'form.start': 'Mulai sewa',
+      'form.note': 'Catatan kebutuhan (opsional)',
+      'form.notePh': 'contoh: butuh saluran air + exhaust untuk dapur',
+      'form.monthsUnit': 'bulan', 'form.discount': 'diskon',
+      'sum.rentService': 'Sewa {rent} + service {service}', 'sum.perMonth': '/ bln',
+      'sum.duration': 'Durasi', 'sum.discount': 'Diskon kontrak panjang',
+      'sum.deposit': 'Deposit ({n} bln, dikembalikan)', 'sum.end': 'Kontrak berakhir', 'sum.total': 'Total kontrak',
+      'form.disclaimer': 'Dengan mengajukan sewa, unit langsung ditandai <b>Dipesan</b> di denah mall. Pesanan disimpan lokal di browser ini (demo leasing) dan bisa dibatalkan kapan saja.',
+      'p.price': 'Harga', 'p.viewAr': 'Lihat di AR', 'p.arUnsupported': 'Buka halaman ini di HP Android atau iOS untuk menaruh produk di ruanganmu. Di desktop kamu tetap bisa memutar model 3D-nya.',
+      'p.arIos': 'Di iPhone/iPad, AR butuh versi model USDZ — belum disertakan di demo ini.',
+      'p.visitShop': 'Kunjungi Toko', 'p.soldBy': 'Dijual oleh', 'p.specs': 'Detail',
+      'p.mvFail': 'Pratinjau 3D gagal dimuat \u2014 cek koneksi ke CDN model-viewer.',
+      'p.buyNote': 'Checkout belum dipasang — versi ini baru sampai showcase dan pratinjau AR.',
+      'hint.rentPrice': '{price}/bln — klik untuk menyewa',
+      'hint.booked': 'Dipesan olehmu — klik untuk detail',
+      'hint.rented': 'Disewa {tenant} — klik untuk detail',
+      'hint.product': '{name} · {price} — klik untuk 3D & AR',
+      'hint.showroom': 'Buka showroom Porsche (halaman lain)',
+      'toast.teleport': 'Kamu dipindahkan ke depan <b>{name}</b>',
+      'toast.moved': 'Berpindah ke titik {x}, {z}',
+      'toast.booked': 'Pengajuan sewa <b>{name}</b> tersimpan. Total {total} untuk {months} bulan.',
+      'toast.cancelled': 'Pesanan {name} dibatalkan. Unit kembali tersedia.',
+      'toast.waitlist': 'Kamu masuk daftar tunggu {name}.',
+      'toast.exported': 'Mengunduh {n} pesanan.',
+      'toast.noBookings': 'Belum ada pesanan untuk diekspor.',
+      'toast.noBookings2': 'Belum ada pesanan tersimpan.',
+      'toast.reset': 'Semua pesanan dihapus.',
+      'toast.storage': 'Browser memblokir penyimpanan lokal.',
+      'confirm.cancel': 'Batalkan pesanan untuk {name}?',
+      'confirm.reset': 'Hapus semua pesanan sewa yang tersimpan di browser ini?',
+      'w3.entranceSub': 'PINTU MASUK UTAMA  •  LANTAI DASAR',
+      'w3.floor2': 'LANTAI 2  •  SEGERA HADIR',
+      'w3.dirTitle': 'DIREKTORI\nLANTAI DASAR',
+      'w3.dirBody': 'BLOK A  :  A1 - A7\nBLOK B  :  B1 - B7\nKIOS    :  K1 - K4\n\nLeasing: klik etalase\nuntuk menyewa',
+      'w3.forRent': 'DISEWAKAN', 'w3.reserved': 'DIPESAN', 'w3.tenant': 'TENANT',
+      'w3.perMonth': '/ BULAN', 'w3.clickToRent': 'KLIK UNTUK SEWA',
+      'w3.yourBooking': 'PESANAN ANDA', 'w3.months': 'BULAN', 'w3.awaiting': 'MENUNGGU VERIFIKASI',
+      'w3.availableSub': 'TERSEDIA', 'w3.reservedSub': 'DIPESAN',
+      'w3.readyToUse': 'AREA SIAP PAKAI', 'w3.openingSoon': 'SEGERA DIBUKA',
+      'w3.openShowroom': 'BUKA SHOWROOM VR', 'w3.viewAr': 'LIHAT DI AR'
+    }
+  };
+
+  var lang = 'en';
+  function t(key, vars) {
+    var str = (STR[lang] && STR[lang][key]) || STR.en[key] || key;
+    if (vars) for (var k in vars) str = str.split('{' + k + '}').join(vars[k]);
+    return str;
+  }
+  function L(obj) { return obj ? (obj[lang] || obj.en) : ''; }
 
   /* --------------------------------- data ---------------------------------- */
   // slot z: index 0 = paling dekat pintu masuk (selatan), index 6 = paling dalam
   var Z_SLOTS = [24, 15, 6, -3, -12, -21, -30];
 
+  var C = {
+    food:    { k: 'food',    en: 'Food & Beverage',       id: 'Kuliner & Minuman' },
+    fashion: { k: 'fashion', en: 'Fashion & Apparel',     id: 'Fesyen & Pakaian' },
+    tech:    { k: 'tech',    en: 'Electronics & Gadgets', id: 'Elektronik & Gadget' },
+    auto:    { k: 'auto',    en: 'Automotive & Showroom', id: 'Otomotif & Showroom' },
+    beauty:  { k: 'beauty',  en: 'Beauty & Spa',          id: 'Kecantikan & Spa' },
+    office:  { k: 'office',  en: 'Flexible / Office',     id: 'Serbaguna / Kantor' },
+    sport:   { k: 'sport',   en: 'Sport & Outdoor',       id: 'Olahraga & Outdoor' },
+    well:    { k: 'sport',   en: 'Sport & Wellness',      id: 'Olahraga & Wellness' },
+    kids:    { k: 'kids',    en: 'Kids & Toys',           id: 'Anak & Mainan' },
+    books:   { k: 'books',   en: 'Books & Hobby',         id: 'Buku & Hobi' },
+    home:    { k: 'home',    en: 'Home & Living',         id: 'Home & Living' },
+    drinks:  { k: 'drinks',  en: 'Beverages',             id: 'Minuman' },
+    acc:     { k: 'acc',     en: 'Accessories',           id: 'Aksesoris' },
+    service: { k: 'service', en: 'Services',              id: 'Jasa & Layanan' },
+    coffee:  { k: 'coffee',  en: 'Coffee & Snacks',       id: 'Kopi & Camilan' }
+  };
+
   var ROW_DEFS = [
     // ---- Blok A (sisi barat / kiri) ----
-    { code:'A1', row:'L', slot:0, depth:13, zone:'prime',    cat:'Fashion & Apparel',   status:'rented',    tenant:'Nusantara Batik',  tagline:'Batik & wastra modern' },
-    { code:'A2', row:'L', slot:1, depth:12, zone:'prime',    cat:'Food & Beverage',     status:'available', tenant:null,               tagline:'Cocok untuk resto / cafe' },
-    { code:'A3', row:'L', slot:2, depth:12, zone:'standard', cat:'Elektronik & Gadget', status:'rented',    tenant:'TechNest Gadget',  tagline:'Gadget & aksesoris' },
-    { code:'A4', row:'L', slot:3, depth:14, zone:'standard', cat:'Otomotif & Showroom', status:'rented',    tenant:'Porsche Gallery',  tagline:'Showroom mobil klasik' },
-    { code:'A5', row:'L', slot:4, depth:11, zone:'standard', cat:'Kecantikan & Spa',    status:'available', tenant:null,               tagline:'Siap untuk klinik / salon' },
-    { code:'A6', row:'L', slot:5, depth:12, zone:'deep',     cat:'Food & Beverage',     status:'rented',    tenant:'Kopi Senja',       tagline:'Specialty coffee bar' },
-    { code:'A7', row:'L', slot:6, depth:11, zone:'deep',     cat:'Serbaguna / Office',  status:'available', tenant:null,               tagline:'Bisa untuk kantor / studio' },
+    { code:'A1', row:'L', slot:0, depth:13, zone:'prime',    cat:C.fashion, status:'rented',    tenant:'Nusantara Batik',
+      tagline:{ en:'Modern batik & woven textiles', id:'Batik & wastra modern' } },
+    { code:'A2', row:'L', slot:1, depth:12, zone:'prime',    cat:C.food,    status:'available', tenant:null,
+      tagline:{ en:'Ready for a restaurant or cafe', id:'Cocok untuk resto / kafe' } },
+    { code:'A3', row:'L', slot:2, depth:12, zone:'standard', cat:C.tech,    status:'rented',    tenant:'TechNest Gadget',
+      tagline:{ en:'Gadgets & accessories', id:'Gadget & aksesoris' } },
+    { code:'A4', row:'L', slot:3, depth:14, zone:'standard', cat:C.auto,    status:'rented',    tenant:'Porsche Gallery',
+      tagline:{ en:'Classic car showroom', id:'Showroom mobil klasik' } },
+    { code:'A5', row:'L', slot:4, depth:11, zone:'standard', cat:C.beauty,  status:'available', tenant:null,
+      tagline:{ en:'Fit for a clinic or salon', id:'Siap untuk klinik / salon' } },
+    { code:'A6', row:'L', slot:5, depth:12, zone:'deep',     cat:C.food,    status:'rented',    tenant:'Kopi Senja',
+      tagline:{ en:'Specialty coffee bar', id:'Specialty coffee bar' } },
+    { code:'A7', row:'L', slot:6, depth:11, zone:'deep',     cat:C.office,  status:'available', tenant:null,
+      tagline:{ en:'Works as an office or studio', id:'Bisa untuk kantor / studio' } },
     // ---- Blok B (sisi timur / kanan) ----
-    { code:'B1', row:'R', slot:0, depth:13, zone:'prime',    cat:'Food & Beverage',     status:'rented',    tenant:'Aroma Bakery',     tagline:'Bakery & patisserie' },
-    { code:'B2', row:'R', slot:1, depth:12, zone:'prime',    cat:'Fashion & Apparel',   status:'available', tenant:null,               tagline:'Etalase kaca menghadap atrium' },
-    { code:'B3', row:'R', slot:2, depth:12, zone:'standard', cat:'Sport & Outdoor',     status:'available', tenant:null,               tagline:'Ideal untuk sport store' },
-    { code:'B4', row:'R', slot:3, depth:14, zone:'standard', cat:'Sport & Wellness',    status:'rented',    tenant:'Zen Fitness',      tagline:'Gym & studio yoga' },
-    { code:'B5', row:'R', slot:4, depth:11, zone:'standard', cat:'Anak & Mainan',       status:'available', tenant:null,               tagline:'Dekat area bermain anak' },
-    { code:'B6', row:'R', slot:5, depth:12, zone:'deep',     cat:'Buku & Hobi',         status:'available', tenant:null,               tagline:'Unit tenang untuk hobby store' },
-    { code:'B7', row:'R', slot:6, depth:11, zone:'deep',     cat:'Home & Living',       status:'available', tenant:null,               tagline:'Akses loading dock belakang' }
+    { code:'B1', row:'R', slot:0, depth:13, zone:'prime',    cat:C.food,    status:'rented',    tenant:'Aroma Bakery',
+      tagline:{ en:'Bakery & patisserie', id:'Bakery & patisserie' } },
+    { code:'B2', row:'R', slot:1, depth:12, zone:'prime',    cat:C.fashion, status:'available', tenant:null,
+      tagline:{ en:'Glass front facing the atrium', id:'Etalase kaca menghadap atrium' } },
+    { code:'B3', row:'R', slot:2, depth:12, zone:'standard', cat:C.sport,   status:'available', tenant:null,
+      tagline:{ en:'Ideal for a sport store', id:'Ideal untuk toko olahraga' } },
+    { code:'B4', row:'R', slot:3, depth:14, zone:'standard', cat:C.well,    status:'rented',    tenant:'Zen Fitness',
+      tagline:{ en:'Gym & yoga studio', id:'Gym & studio yoga' } },
+    { code:'B5', row:'R', slot:4, depth:11, zone:'standard', cat:C.kids,    status:'available', tenant:null,
+      tagline:{ en:'Next to the kids play area', id:'Dekat area bermain anak' } },
+    { code:'B6', row:'R', slot:5, depth:12, zone:'deep',     cat:C.books,   status:'available', tenant:null,
+      tagline:{ en:'Quiet unit for a hobby store', id:'Unit tenang untuk toko hobi' } },
+    { code:'B7', row:'R', slot:6, depth:11, zone:'deep',     cat:C.home,    status:'available', tenant:null,
+      tagline:{ en:'Rear loading dock access', id:'Akses loading dock belakang' } }
   ];
 
   var KIOSK_DEFS = [
-    { code:'K1', z: 20,  size:4, cat:'Minuman',           status:'rented',    tenant:'Juice Bar Segar', tagline:'Jus & smoothie' },
-    { code:'K2', z: 9,   size:4, cat:'Aksesoris',         status:'available', tenant:null,              tagline:'Kios tengah koridor utama' },
-    { code:'K3', z: -8,  size:4, cat:'Jasa & Layanan',    status:'available', tenant:null,              tagline:'Cocok untuk counter jasa' },
-    { code:'K4', z: -25, size:4, cat:'Kopi & Snack',      status:'available', tenant:null,              tagline:'Dekat area eskalator' }
+    { code:'K1', z: 20,  size:4, cat:C.drinks,  status:'rented',    tenant:'Juice Bar Segar',
+      tagline:{ en:'Juice & smoothies', id:'Jus & smoothie' } },
+    { code:'K2', z: 9,   size:4, cat:C.acc,     status:'available', tenant:null,
+      tagline:{ en:'Kiosk in the main corridor', id:'Kios di koridor utama' } },
+    { code:'K3', z: -8,  size:4, cat:C.service, status:'available', tenant:null,
+      tagline:{ en:'Great for a service counter', id:'Cocok untuk counter jasa' } },
+    { code:'K4', z: -25, size:4, cat:C.coffee,  status:'available', tenant:null,
+      tagline:{ en:'Close to the escalator', id:'Dekat area eskalator' } }
   ];
 
   var RATES = { prime: 320000, standard: 260000, deep: 210000, kiosk: 520000 };
 
-  var FACILITIES_UNIT = ['AC sentral', 'Listrik 5.500 VA', 'Air bersih', 'Grease trap (F&B)', 'CCTV 24 jam', 'Wi-Fi tenant', 'Signage board', 'Loading access'];
-  var FACILITIES_KIOSK = ['AC koridor', 'Listrik 2.200 VA', 'Meja counter', 'Signage kanopi', 'CCTV 24 jam', 'Wi-Fi tenant'];
+  var FACILITIES_UNIT = {
+    en: ['Central AC', '5,500 VA power', 'Water supply', 'Grease trap (F&B)', '24h CCTV', 'Tenant Wi-Fi', 'Signage board', 'Loading access'],
+    id: ['AC sentral', 'Listrik 5.500 VA', 'Air bersih', 'Grease trap (F&B)', 'CCTV 24 jam', 'Wi-Fi tenant', 'Signage board', 'Loading access']
+  };
+  var FACILITIES_KIOSK = {
+    en: ['Corridor AC', '2,200 VA power', 'Counter top', 'Canopy signage', '24h CCTV', 'Tenant Wi-Fi'],
+    id: ['AC koridor', 'Listrik 2.200 VA', 'Meja counter', 'Signage kanopi', 'CCTV 24 jam', 'Wi-Fi tenant']
+  };
+
+  /* ------------------------- katalog produk (AR-ready) ---------------------- */
+  // booth: 0 = sisi kiri toko, 1 = sisi kanan, 'car' = panggung tengah, 'counter' = atas meja kios
+  var PRODUCT_DEFS = [
+    { id:'P-A1-1', shop:'A1', booth:0, model:'assets/products/batik-shirt.glb', price:890000, scale:1, lift:0, show:1.7,
+      name:{ en:'Hand-drawn Batik Shirt', id:'Kemeja Batik Tulis' },
+      desc:{ en:'Hand-drawn batik on breathable cotton, finished by artisans in Central Java.',
+             id:'Batik tulis tangan di atas katun adem, dikerjakan perajin Jawa Tengah.' },
+      specs:{ en:['100% cotton', 'Size S – XXL', 'Hand-drawn (batik tulis)'],
+              id:['Katun 100%', 'Ukuran S – XXL', 'Batik tulis tangan'] } },
+    { id:'P-A1-2', shop:'A1', booth:1, model:'assets/products/batik-roll.glb', price:1250000, scale:1, lift:0.08, show:1.5,
+      name:{ en:'Batik Fabric Roll 2.5 m', id:'Gulungan Kain Batik 2,5 m' },
+      desc:{ en:'Two and a half metres of stamped batik, ready to be tailored.',
+             id:'Kain batik cap sepanjang 2,5 meter, siap dijahit sesuai kebutuhan.' },
+      specs:{ en:['2.5 m × 115 cm', 'Natural dye', 'Stamped batik (cap)'],
+              id:['2,5 m × 115 cm', 'Pewarna alam', 'Batik cap'] } },
+
+    { id:'P-A3-1', shop:'A3', booth:0, model:'assets/products/smartwatch.glb', price:2450000, scale:1, lift:0.02, show:6,
+      name:{ en:'Pulse Smartwatch 2', id:'Jam Pintar Pulse 2' },
+      desc:{ en:'AMOLED smartwatch with 14-day battery, GPS and sleep tracking.',
+             id:'Jam pintar AMOLED dengan baterai 14 hari, GPS, dan pelacak tidur.' },
+      specs:{ en:['1.4" AMOLED', '14-day battery', '5 ATM water resistant'],
+              id:['AMOLED 1,4"', 'Baterai 14 hari', 'Tahan air 5 ATM'] } },
+    { id:'P-A3-2', shop:'A3', booth:1, model:'assets/products/smartphone.glb', price:6999000, scale:1, lift:0.02, show:4,
+      name:{ en:'Nova X Phone', id:'Ponsel Nova X' },
+      desc:{ en:'Flagship phone with a 6.7" display and a 50 MP main camera.',
+             id:'Ponsel flagship dengan layar 6,7" dan kamera utama 50 MP.' },
+      specs:{ en:['6.7" 120 Hz', '50 MP camera', '5,000 mAh'],
+              id:['6,7" 120 Hz', 'Kamera 50 MP', '5.000 mAh'] } },
+
+    { id:'P-A4-1', shop:'A4', booth:'car', model:'assets/Porsche%20356B.glb', price:3850000000, scale:1, lift:0, show:1,
+      name:{ en:'Porsche 356B (1962)', id:'Porsche 356B (1962)' },
+      desc:{ en:'Fully restored 356B coupe, matching numbers, showroom condition.',
+             id:'Coupe 356B restorasi penuh, matching numbers, kondisi showroom.' },
+      specs:{ en:['1.6 L flat-four', 'Restored 2023', 'Matching numbers'],
+              id:['Flat-four 1,6 L', 'Restorasi 2023', 'Matching numbers'] } },
+    { id:'P-A4-2', shop:'A4', booth:1, model:'assets/Porsche%20356B.glb', price:4500000, scale:0.055, lift:0.02, show:2,
+      name:{ en:'Porsche 356B 1:18 Scale Model', id:'Miniatur Porsche 356B 1:18' },
+      desc:{ en:'Die-cast 1:18 replica with opening doors and a display base.',
+             id:'Replika die-cast 1:18 dengan pintu bisa dibuka dan alas pajangan.' },
+      specs:{ en:['1:18 die-cast', 'Opening doors', 'Display base included'],
+              id:['Die-cast 1:18', 'Pintu bisa dibuka', 'Termasuk alas pajangan'] } },
+
+    { id:'P-A6-1', shop:'A6', booth:0, model:'assets/products/coffee-cup.glb', price:38000, scale:1, lift:0, show:3,
+      name:{ en:'Senja Latte 16 oz', id:'Senja Latte 16 oz' },
+      desc:{ en:'House blend espresso with steamed milk and a hint of palm sugar.',
+             id:'Espresso house blend dengan susu panas dan sentuhan gula aren.' },
+      specs:{ en:['16 oz', 'House blend', 'Hot or iced'], id:['16 oz', 'House blend', 'Panas atau dingin'] } },
+    { id:'P-A6-2', shop:'A6', booth:1, model:'assets/products/coffee-bottle.glb', price:52000, scale:1, lift:0, show:2.6,
+      name:{ en:'Cold Brew Bottle 250 ml', id:'Botol Cold Brew 250 ml' },
+      desc:{ en:'Steeped for 18 hours, bottled the same morning.',
+             id:'Diseduh 18 jam, dibotolkan di pagi yang sama.' },
+      specs:{ en:['250 ml', '18h steep', 'No sugar'], id:['250 ml', 'Seduh 18 jam', 'Tanpa gula'] } },
+
+    { id:'P-B1-1', shop:'B1', booth:0, model:'assets/products/cake.glb', price:285000, scale:1, lift:0, show:2,
+      name:{ en:'Strawberry Cream Cake', id:'Kue Krim Stroberi' },
+      desc:{ en:'Soft sponge layered with fresh cream and strawberries.',
+             id:'Sponge lembut berlapis krim segar dan stroberi.' },
+      specs:{ en:['20 cm', 'Serves 8', 'Made fresh daily'], id:['20 cm', 'Untuk 8 orang', 'Dibuat tiap hari'] } },
+    { id:'P-B1-2', shop:'B1', booth:1, model:'assets/products/bread.glb', price:58000, scale:1, lift:0, show:2.2,
+      name:{ en:'Artisan Sourdough', id:'Roti Sourdough Artisan' },
+      desc:{ en:'Slow-fermented for 24 hours, baked in a stone oven.',
+             id:'Fermentasi lambat 24 jam, dipanggang di oven batu.' },
+      specs:{ en:['600 g', '24h fermentation', 'Stone-baked'], id:['600 g', 'Fermentasi 24 jam', 'Oven batu'] } },
+
+    { id:'P-B4-1', shop:'B4', booth:0, model:'assets/products/dumbbell.glb', price:850000, scale:1, lift:0.02, show:2,
+      name:{ en:'Zen Dumbbell 10 kg', id:'Dumbbell Zen 10 kg' },
+      desc:{ en:'Rubber-coated dumbbell with a knurled chrome handle.',
+             id:'Dumbbell berlapis karet dengan pegangan krom bertekstur.' },
+      specs:{ en:['10 kg', 'Rubber coated', 'Knurled handle'], id:['10 kg', 'Lapis karet', 'Pegangan bertekstur'] } },
+    { id:'P-B4-2', shop:'B4', booth:1, model:'assets/products/yoga-mat.glb', price:420000, scale:1, lift:0.1, show:1.6,
+      name:{ en:'Zen Yoga Mat 6 mm', id:'Matras Yoga Zen 6 mm' },
+      desc:{ en:'Non-slip TPE mat with alignment lines and a carry strap.',
+             id:'Matras TPE anti-slip dengan garis panduan dan tali jinjing.' },
+      specs:{ en:['183 × 61 cm', '6 mm TPE', 'Carry strap'], id:['183 × 61 cm', 'TPE 6 mm', 'Tali jinjing'] } },
+
+    { id:'P-K1-1', shop:'K1', booth:'counter', model:'assets/products/juice-cup.glb', price:32000, scale:1, lift:0, show:3,
+      name:{ en:'Mango Sunrise Juice', id:'Jus Mango Sunrise' },
+      desc:{ en:'Cold-pressed mango and orange, no added sugar.',
+             id:'Mangga dan jeruk cold-pressed, tanpa tambahan gula.' },
+      specs:{ en:['400 ml', 'Cold pressed', 'No added sugar'], id:['400 ml', 'Cold pressed', 'Tanpa gula tambahan'] } }
+  ];
 
   /* -------------------------------- runtime -------------------------------- */
   var UNITS = [];                 // seluruh unit (shop + kiosk)
   var BY_ID = {};
+  var PRODUCTS = [];              // produk siap pakai (dengan referensi unit)
+  var PROD_BY_ID = {};
   var COLLIDERS = [];             // {x1,z1,x2,z2}
+  var I18N_3D = [];               // { el, attr, key } teks 3D yang ikut ganti bahasa
   var bookings = loadJSON(LS_KEY, {});
   var waitlist = loadJSON(LS_WAIT, {});
   var activeFilter = 'all';
+  var activeTab = 'spaces';
   var searchTerm = '';
   var hovered = null;
+  var hoveredProduct = null;
 
   function loadJSON(key, fallback) {
     try { var v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' ? v : fallback; }
     catch (e) { return fallback; }
   }
   function saveJSON(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { toast('Browser memblokir penyimpanan lokal.', 'warn'); }
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { toast(t('toast.storage'), 'warn'); }
   }
 
-  var rupiah = function (n) { return 'Rp ' + Math.round(n).toLocaleString('id-ID'); };
+  var rupiah = function (n) {
+    return 'Rp ' + Math.round(n).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US');
+  };
   var shortRp = function (n) {
-    if (n >= 1e9) return 'Rp ' + (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + ' M';
-    if (n >= 1e6) return 'Rp ' + (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + ' jt';
+    if (lang === 'id') {
+      if (n >= 1e9) return 'Rp ' + (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + ' M';
+      if (n >= 1e6) return 'Rp ' + (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + ' jt';
+    } else {
+      if (n >= 1e9) return 'Rp ' + (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + ' bn';
+      if (n >= 1e6) return 'Rp ' + (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + ' mn';
+    }
     return rupiah(n);
   };
 
@@ -415,7 +763,7 @@
         width: dz, depth: d.depth, area: area, zone: d.zone,
         rate: rate, monthly: Math.round(area * rate / 100000) * 100000,
         service: Math.round(area * SERVICE_CHARGE / 100000) * 100000,
-        facilities: FACILITIES_UNIT, refs: {}
+        facilities: FACILITIES_UNIT, products: [], refs: {}
       };
       UNITS.push(u); BY_ID[u.id] = u;
     });
@@ -423,16 +771,30 @@
     KIOSK_DEFS.forEach(function (d) {
       var area = d.size * d.size;
       var u = {
-        id: d.code, kind: 'kiosk', name: 'Kios ' + d.code, cat: d.cat, tagline: d.tagline,
+        id: d.code, kind: 'kiosk', name: 'Kiosk ' + d.code, cat: d.cat, tagline: d.tagline,
         baseStatus: d.status, tenant: d.tenant,
         cx: 0, cz: d.z, dx: d.size, dz: d.size, facing: -1, front: 0,
         width: d.size, depth: d.size, area: area, zone: 'kiosk',
         rate: RATES.kiosk, monthly: Math.round(area * RATES.kiosk / 100000) * 100000,
         service: Math.round(area * SERVICE_CHARGE / 100000) * 100000,
-        facilities: FACILITIES_KIOSK, refs: {}
+        facilities: FACILITIES_KIOSK, products: [], refs: {}
       };
       UNITS.push(u); BY_ID[u.id] = u;
     });
+
+    PRODUCT_DEFS.forEach(function (d) {
+      var unit = BY_ID[d.shop];
+      if (!unit) return;
+      var pr = Object.create(d);
+      pr.unit = unit;
+      PRODUCTS.push(pr);
+      PROD_BY_ID[pr.id] = pr;
+      unit.products.push(pr);
+    });
+  }
+
+  function unitName(u) {
+    return (u.kind === 'kiosk' ? (lang === 'id' ? 'Kios ' : 'Kiosk ') : 'Space ') + u.id;
   }
 
   function statusOf(u) {
@@ -469,6 +831,8 @@
     }
     return e;
   }
+  // teks 3D yang nilainya mengikuti kunci bahasa
+  function i18nText(el, key) { I18N_3D.push({ el: el, key: key }); el.setAttribute('value', t(key)); return el; }
   function text(parent, value, x, y, z, rotY, opts) {
     opts = opts || {};
     return make('a-text', {
@@ -512,7 +876,7 @@
     box(root,  13, 3, MALL.maxZ + 0.25, 14, 6, 0.5, wallColor, { collide: true });
     box(root,   0, 5.2, MALL.maxZ + 0.25, 12, 1.6, 0.5, '#2c3140', { collide: false });
     text(root, 'WOLFPUP VIRTUAL MALL', 0, 5.2, MALL.maxZ - 0.1, 180, { width: 16, color: '#ffb020' });
-    text(root, 'MAIN ENTRANCE  •  LANTAI DASAR', 0, 4.5, MALL.maxZ - 0.1, 180, { width: 10, color: '#cbd3e2' });
+    i18nText(text(root, '', 0, 4.5, MALL.maxZ - 0.1, 180, { width: 10, color: '#cbd3e2' }), 'w3.entranceSub');
 
     // plafon di atas deretan toko + balok melintang koridor (atrium terbuka)
     make('a-plane', { position: ((MALL.minX + FRONT_L) / 2) + ' ' + CEIL_Y + ' ' + cz, rotation: '90 0 0', width: (FRONT_L - MALL.minX), height: D, color: '#f2efe8' }, root);
@@ -537,7 +901,7 @@
       box(esc,  2.2, 0.25 + s * 0.28, -s * 0.55, 3.4, 0.5 + s * 0.56, 0.55, s % 2 ? '#a9b0be' : '#98a0ae', {});
     }
     box(esc, 0, 4.4, -2.6, 13, 0.3, 6, '#cfd5df', { cast: false });
-    text(esc, 'LANTAI 2  •  SEGERA HADIR', 0, 5.1, -2.5, 0, { width: 11, color: '#3a4152' });
+    i18nText(text(esc, '', 0, 5.1, -2.5, 0, { width: 11, color: '#3a4152' }), 'w3.floor2');
     COLLIDERS.push({ x1: -4.6, x2: 4.6, z1: MALL.minZ + 1, z2: MALL.minZ + 7 });
 
     // air mancur atrium
@@ -552,8 +916,8 @@
     // papan direktori dekat pintu masuk
     var dir = make('a-entity', { position: '-4.6 0 27' }, root);
     box(dir, 0, 1.6, 0, 0.35, 3.2, 2.6, '#1b1f2b', { collide: true, origin: [-4.6, 27] });
-    text(dir, 'DIREKTORI\nLANTAI DASAR', 0.2, 2.5, 0, 90, { width: 3.4, color: '#ffb020' });
-    text(dir, 'BLOK A  :  A1 - A7\nBLOK B  :  B1 - B7\nKIOS    :  K1 - K4\n\nLeasing: klik etalase\nuntuk menyewa', 0.2, 1.4, 0, 90, { width: 3, color: '#dfe5f0' });
+    i18nText(text(dir, '', 0.2, 2.5, 0, 90, { width: 3.4, color: '#ffb020' }), 'w3.dirTitle');
+    i18nText(text(dir, '', 0.2, 1.4, 0, 90, { width: 3, color: '#dfe5f0' }), 'w3.dirBody');
 
     // bangku & planter sepanjang koridor
     var props = document.getElementById('mall-props');
@@ -569,18 +933,16 @@
     });
   }
 
-  var ACCENTS = [
-    ['Food', '#e6c184'], ['Fashion', '#d3a3c2'], ['Elektronik', '#8fb9df'], ['Kecantikan', '#e8b6c6'],
-    ['Sport', '#93c9a5'], ['Anak', '#f2bd8c'], ['Buku', '#b7abe0'], ['Home', '#c8b193'],
-    ['Jasa', '#a6c9d6'], ['Otomotif', '#a6adbb'], ['Minuman', '#8fd3c4'], ['Kopi', '#c9a480'],
-    ['Aksesoris', '#dcc6a0'], ['Serbaguna', '#c3c7cd']
-  ];
-  function accentColor(cat) {
-    for (var i = 0; i < ACCENTS.length; i++) if (cat.indexOf(ACCENTS[i][0]) === 0 || cat.indexOf(ACCENTS[i][0]) > -1) return ACCENTS[i][1];
-    return '#cfc7bb';
-  }
+  var ACCENTS = {
+    food: '#e6c184', fashion: '#d3a3c2', tech: '#8fb9df', auto: '#a6adbb', beauty: '#e8b6c6',
+    office: '#c3c7cd', sport: '#93c9a5', kids: '#f2bd8c', books: '#b7abe0', home: '#c8b193',
+    drinks: '#8fd3c4', acc: '#dcc6a0', service: '#a6c9d6', coffee: '#c9a480'
+  };
+  function accentColor(cat) { return ACCENTS[cat && cat.k] || '#cfc7bb'; }
 
   /* ------------------------------ bangun unit ------------------------------ */
+  var PRODUCT_LABELS = [];        // { el, product } label 3D yang ikut ganti bahasa
+
   function buildUnits() {
     var root = document.getElementById('mall-units');
     UNITS.forEach(function (u) {
@@ -589,16 +951,52 @@
     });
   }
 
+  // memasang satu produk di atas booth/etalase: model 3D + label + area klik
+  function mountProduct(parent, pr, x, y, z, rotY, hit) {
+    // alas pajangan kecil supaya produk terbaca sebagai display
+    make('a-cylinder', { position: x + ' ' + (y + 0.03) + ' ' + z, radius: 0.34, height: 0.06,
+      color: '#2a2f3a', metalness: 0.3, roughness: 0.5 }, parent);
+    var sc = pr.scale * (pr.show || 1);       // ukuran pajangan (AR tetap skala asli)
+    var spin = make('a-entity', {
+      position: x + ' ' + (y + 0.06 + pr.lift * (pr.show || 1)) + ' ' + z,
+      animation: 'property: rotation; to: 0 360 0; loop: true; dur: 18000; easing: linear'
+    }, parent);
+    make('a-gltf-model', {
+      src: pr.model, scale: sc + ' ' + sc + ' ' + sc, shadow: 'cast: true'
+    }, spin);
+
+    var label = text(parent, '', x, y + (hit ? hit.labelY || 0.75 : 0.75), z, rotY, { width: 2.2, color: '#ffffff' });
+    PRODUCT_LABELS.push({ el: label, product: pr });
+    refreshProductLabel(label, pr);
+
+    var hw = (hit && hit.w) || 0.7, hh = (hit && hit.h) || 0.55, hd = (hit && hit.d) || 0.7;
+    var target = make('a-box', {
+      position: x + ' ' + (y + hh / 2) + ' ' + z, width: hw, height: hh, depth: hd,
+      opacity: 0.001, transparent: 'true', 'class': 'clickable'
+    }, parent);
+    target.addEventListener('click', function () { openProduct(pr.id); });
+    target.addEventListener('mouseenter', function () {
+      hovered = null; hoveredProduct = pr;
+      showHint(t('hint.product', { name: '<b>' + esc(L(pr.name)) + '</b>', price: shortRp(pr.price) }));
+    });
+    target.addEventListener('mouseleave', function () { if (hoveredProduct === pr) hoveredProduct = null; hideHint(); });
+    return spin;
+  }
+
+  function refreshProductLabel(el, pr) {
+    el.setAttribute('value', L(pr.name).toUpperCase() + '\n' + shortRp(pr.price));
+  }
+
   function buildShop(u, root) {
     var e = make('a-entity', { position: u.cx + ' 0 ' + u.cz, id: 'unit-' + u.id }, root);
     var fx = u.facing * (u.dx / 2);                  // x etalase relatif ke pusat unit
     var bx = -fx;                                    // x dinding belakang
     var rotY = u.facing > 0 ? 90 : -90;              // rotasi menghadap koridor
+    var org = [u.cx, u.cz];
 
     // lantai unit
     make('a-plane', { position: '0 0.04 0', rotation: '-90 0 0', width: u.dx, height: u.dz, color: '#efe6d8', roughness: 0.85 }, e);
     // dinding belakang + samping
-    var org = [u.cx, u.cz];
     box(e, bx, WALL_H / 2, 0, 0.3, WALL_H, u.dz, '#e3ded4', { collide: true, origin: org });
     box(e, 0, WALL_H / 2, -u.dz / 2, u.dx, WALL_H, 0.3, '#ded8cd', { collide: true, origin: org });
     box(e, 0, WALL_H / 2,  u.dz / 2, u.dx, WALL_H, 0.3, '#ded8cd', { collide: true, origin: org });
@@ -609,6 +1007,13 @@
       var pz = sgn * (DOOR_W / 2 + panelW / 2);
       box(e, fx, 2.1, pz, 0.18, 4.2, panelW, '#9fc6dd', { collide: true, origin: org, opacity: 0.16, metalness: 0.2, roughness: 0.05 });
       box(e, fx, 0.15, pz, 0.3, 0.3, panelW, '#6c7484', { collide: false });
+      // area klik unit: hanya di atas kaca, supaya pintu tetap bisa ditembus sinar kursor
+      var hit = make('a-plane', {
+        position: (fx + u.facing * 0.55) + ' 2.2 ' + pz, rotation: '0 ' + rotY + ' 0',
+        width: panelW, height: 4.4, opacity: 0.001, transparent: 'true', side: 'double',
+        'class': 'clickable'
+      }, e);
+      wireInteraction(hit, u);
     });
     // kusen pintu + bulkhead atas
     box(e, fx, 4.3, 0, 0.4, 0.5, u.dz, '#2f3644', { collide: false });
@@ -617,7 +1022,7 @@
     // papan nama + strip status
     var sx = fx + u.facing * 0.28;
     box(e, sx, 5.35, 0, 0.16, 1.15, u.dz * 0.86, '#161a24', { collide: false });
-    u.refs.name = text(e, u.name, sx + u.facing * 0.1, 5.55, 0, rotY, { width: u.dz * 0.95, color: '#ffffff' });
+    u.refs.name = text(e, unitName(u), sx + u.facing * 0.1, 5.55, 0, rotY, { width: u.dz * 0.95, color: '#ffffff' });
     u.refs.sub  = text(e, '', sx + u.facing * 0.1, 5.05, 0, rotY, { width: u.dz * 0.8, color: '#9aa3b5' });
     u.refs.strip = box(e, fx + u.facing * 0.2, 4.62, 0, 0.1, 0.18, u.dz * 0.86, '#36d399', { collide: false });
 
@@ -629,19 +1034,24 @@
     u.refs.boardTitle = text(e, '', bx2 + u.facing * 0.1, 2.28, bz, rotY, { width: 2.6, color: '#36d399' });
     u.refs.boardBody  = text(e, '', bx2 + u.facing * 0.1, 1.68, bz, rotY, { width: 2.2, color: '#e7ebf3', wrap: 30 });
 
-    // interior
-    box(e, bx + u.facing * 0.9, 1.4, 0, 0.25, 2.8, u.dz * 0.7, accentColor(u.cat), { cast: false });   // backdrop
+    // backdrop interior berwarna kategori
+    box(e, bx + u.facing * 0.9, 1.4, 0, 0.25, 2.8, u.dz * 0.7, accentColor(u.cat), { cast: false });
     u.refs.wallText = text(e, '', bx + u.facing * 1.1, 2.4, 0, rotY, { width: u.dz * 0.9, color: '#5b6273', wrap: 22 });
-    box(e, -u.facing * 0.2, 0.5, -u.dz / 2 + 1.4, 1.6, 1.0, 2.2, '#cbb79a', { collide: true, origin: org });  // counter
-    box(e, u.facing * (u.dx / 2 - 3.2), 0.9, u.dz / 2 - 1.3, 0.5, 1.8, 2.0, '#d9d2c4', { collide: true, origin: org }); // rak
 
-    // interaksi: bidang transparan menutup bukaan etalase
-    var hit = make('a-plane', {
-      position: (fx + u.facing * 0.55) + ' 2.2 0', rotation: '0 ' + rotY + ' 0',
-      width: u.dz, height: 4.4, opacity: 0.001, transparent: 'true', side: 'double',
-      'class': 'clickable'
-    }, e);
-    wireInteraction(hit, u);
+    if (u.baseStatus === 'rented') {
+      // meja kasir di tengah belakang + dua booth produk di sisi kiri-kanan (lihat sketsa)
+      box(e, -u.facing * (u.dx / 2 - 1.8), 0.52, 0, 1.2, 1.04, 2.6, '#cbb79a', { collide: true, origin: org });
+      box(e, -u.facing * (u.dx / 2 - 1.8), 1.08, 0, 1.4, 0.08, 2.8, '#8a6f52', { collide: false });
+      u.refs.cashier = text(e, 'CASHIER', -u.facing * (u.dx / 2 - 2.6), 1.6, 0, rotY, { width: 2.4, color: '#7b8394' });
+
+      [-1, 1].forEach(function (sgn, i) {
+        var bzz = sgn * (u.dz / 2 - 1.05);
+        box(e, -u.facing * 1.2, 0.45, bzz, 2.6, 0.9, 1.1, '#e4dccc', { collide: true, origin: org });
+        box(e, -u.facing * 1.2, 0.92, bzz, 2.8, 0.06, 1.25, '#b9a688', { collide: false });
+        var pr = u.products.filter(function (p) { return p.booth === i; })[0];
+        if (pr) mountProduct(e, pr, -u.facing * 1.2, 0.95, bzz, rotY, { w: 1.0, h: 0.8, d: 1.0, labelY: 1.0 });
+      });
+    }
 
     // showroom khusus: model Porsche dari repo ini
     if (u.tenant === 'Porsche Gallery') {
@@ -650,13 +1060,32 @@
         animation: 'property: rotation; to: 0 360 0; loop: true; dur: 22000; easing: linear' }, e);
       make('a-gltf-model', { src: '#porsche-model', position: '0 0 0', rotation: '0 ' + (u.facing > 0 ? 90 : -90) + ' 0', shadow: 'cast: true' }, turn);
       make('a-entity', { light: 'type: spot; intensity: 1.1; angle: 42; penumbra: 0.5; color: #fff1d8; castShadow: true; shadowMapWidth: 1024; shadowMapHeight: 1024', position: '0 4.2 0', rotation: '-90 0 0' }, e);
+      COLLIDERS.push({ x1: u.cx - 2.7, x2: u.cx + 2.7, z1: u.cz - 2.7, z2: u.cz + 2.7 });
+
+      var car = u.products.filter(function (p) { return p.booth === 'car'; })[0];
+      if (car) {
+        var carHit = make('a-box', {
+          position: '0 0.9 0', width: 5.0, height: 1.8, depth: 5.0,
+          opacity: 0.001, transparent: 'true', 'class': 'clickable'
+        }, e);
+        carHit.addEventListener('click', function () { openProduct(car.id); });
+        carHit.addEventListener('mouseenter', function () {
+          hovered = null; hoveredProduct = car;
+          showHint(t('hint.product', { name: '<b>' + esc(L(car.name)) + '</b>', price: shortRp(car.price) }));
+        });
+        carHit.addEventListener('mouseleave', function () { if (hoveredProduct === car) hoveredProduct = null; hideHint(); });
+        var carLabel = text(e, '', 0, 2.35, 0, rotY, { width: 3.4, color: '#ffffff' });
+        PRODUCT_LABELS.push({ el: carLabel, product: car });
+        refreshProductLabel(carLabel, car);
+      }
+
       var link = make('a-plane', {
         position: (bx + u.facing * 1.2) + ' 1.1 ' + (-u.dz / 2 + 1.6), rotation: '0 ' + rotY + ' 0',
         width: 2.6, height: 0.7, color: '#ffb020', 'class': 'clickable'
       }, e);
-      make('a-text', { value: 'BUKA SHOWROOM VR', position: '0 0 0.02', align: 'center', color: '#241500', width: 4.6 }, link);
+      i18nText(make('a-text', { value: '', position: '0 0 0.02', align: 'center', color: '#241500', width: 4.6 }, link), 'w3.openShowroom');
       link.addEventListener('click', function () { window.location.href = 'index.html'; });
-      link.addEventListener('mouseenter', function () { showHint('Buka showroom Porsche (halaman lain)'); });
+      link.addEventListener('mouseenter', function () { showHint(t('hint.showroom')); });
       link.addEventListener('mouseleave', hideHint);
     }
   }
@@ -680,28 +1109,32 @@
       box(e, -(s + 0.8) / 2, 3.3, 0, 0.06, 0.13, s + 0.84, '#36d399', { collide: false })
     ];
     // papan nama dua sisi
-    u.refs.name = text(e, u.name, 0, 3.0, s / 2 + 0.42, 0, { width: 5.4, color: '#ffffff' });
-    u.refs.name2 = text(e, u.name, 0, 3.0, -s / 2 - 0.42, 180, { width: 5.4, color: '#ffffff' });
+    u.refs.name = text(e, unitName(u), 0, 3.0, s / 2 + 0.42, 0, { width: 5.4, color: '#ffffff' });
+    u.refs.name2 = text(e, unitName(u), 0, 3.0, -s / 2 - 0.42, 180, { width: 5.4, color: '#ffffff' });
     u.refs.boardTitle = text(e, '', 0, 2.55, s / 2 + 0.42, 0, { width: 4.2, color: '#36d399' });
     u.refs.boardBody  = text(e, '', 0, 2.2, -s / 2 - 0.42, 180, { width: 4.2, color: '#e7ebf3' });
     u.refs.sub = text(e, '', 0, 2.2, s / 2 + 0.42, 0, { width: 4.2, color: '#c8cede' });
 
+    // area klik kios: sebatas badan counter, supaya produk di atasnya tetap bisa diklik
     var hit = make('a-box', {
-      position: '0 1.7 0', width: s + 1.2, height: 3.4, depth: s + 1.2,
+      position: '0 0.6 0', width: s + 0.6, height: 1.2, depth: s + 0.6,
       opacity: 0.001, transparent: 'true', 'class': 'clickable'
     }, e);
     wireInteraction(hit, u);
+
+    var pr = u.products.filter(function (p) { return p.booth === 'counter'; })[0];
+    if (pr) mountProduct(e, pr, 0, 1.22, 0, 0, { w: 0.9, h: 0.7, d: 0.9, labelY: 0.95 });
   }
 
   function wireInteraction(el, u) {
     el.addEventListener('click', function () { openUnit(u.id); });
     el.addEventListener('mouseenter', function () {
-      hovered = u;
+      hovered = u; hoveredProduct = null;
       var st = statusOf(u);
-      showHint('<b>' + u.name + '</b> &middot; ' + u.area + ' m&sup2; &middot; ' +
-        (st === 'available' ? shortRp(u.monthly) + '/bln — klik untuk menyewa'
-          : st === 'booked' ? 'Dipesan olehmu — klik untuk detail'
-          : 'Disewa ' + u.tenant + ' — klik untuk detail'));
+      showHint('<b>' + unitName(u) + '</b> &middot; ' + u.area + ' m&sup2; &middot; ' +
+        (st === 'available' ? t('hint.rentPrice', { price: shortRp(u.monthly) })
+          : st === 'booked' ? t('hint.booked')
+          : t('hint.rented', { tenant: esc(u.tenant) })));
     });
     el.addEventListener('mouseleave', function () { if (hovered === u) hovered = null; hideHint(); });
   }
@@ -719,17 +1152,19 @@
 
     var title, body, sub;
     if (st === 'available') {
-      title = 'DISEWAKAN';
-      body = u.area + ' M2  |  ' + shortRp(u.monthly) + ' / BULAN\n' + u.cat.toUpperCase() + '\nKLIK UNTUK SEWA';
-      sub = 'TERSEDIA • ' + u.area + ' M2';
+      title = t('w3.forRent');
+      body = u.area + ' M2  |  ' + shortRp(u.monthly).toUpperCase() + ' ' + t('w3.perMonth') + '\n' +
+        L(u.cat).toUpperCase() + '\n' + t('w3.clickToRent');
+      sub = t('w3.availableSub') + ' • ' + u.area + ' M2';
     } else if (st === 'booked') {
       var b = bookings[u.id];
-      title = 'DIPESAN';
-      body = (b && b.brand ? b.brand.toUpperCase() : 'PESANAN ANDA') + '\n' + (b ? b.months + ' BULAN' : '') + '\nMENUNGGU VERIFIKASI';
-      sub = 'DIPESAN • ' + u.cat.toUpperCase();
+      title = t('w3.reserved');
+      body = (b && b.brand ? b.brand.toUpperCase() : t('w3.yourBooking')) + '\n' +
+        (b ? b.months + ' ' + t('w3.months') : '') + '\n' + t('w3.awaiting');
+      sub = t('w3.reservedSub') + ' • ' + L(u.cat).toUpperCase();
     } else {
-      title = 'TENANT';
-      body = (u.tenant || '').toUpperCase() + '\n' + u.cat.toUpperCase();
+      title = t('w3.tenant');
+      body = (u.tenant || '').toUpperCase() + '\n' + L(u.cat).toUpperCase();
       sub = u.tenant ? u.tenant.toUpperCase() : '';
     }
     if (r.boardTitle) { r.boardTitle.setAttribute('value', title); r.boardTitle.setAttribute('color', meta.color); }
@@ -737,8 +1172,9 @@
     if (r.sub) r.sub.setAttribute('value', sub);
     if (r.wallText) r.wallText.setAttribute('value', st === 'rented'
       ? (u.tenant || '').toUpperCase()
-      : (st === 'booked' ? 'SEGERA DIBUKA' : 'AREA SIAP PAKAI\n' + u.area + ' M2'));
-    if (r.name2) r.name2.setAttribute('value', u.name);
+      : (st === 'booked' ? t('w3.openingSoon') : t('w3.readyToUse') + '\n' + u.area + ' M2'));
+    if (r.name) r.name.setAttribute('value', unitName(u));
+    if (r.name2) r.name2.setAttribute('value', unitName(u));
   }
 
   /* --------------------- kontrol jalan kaki + tabrakan ---------------------- */
@@ -813,24 +1249,31 @@
   });
 
   /* --------------------------------- UI 2D ---------------------------------- */
-  var $ = function (s) { return document.querySelector(s); };
+  var $ = function (sel) { return document.querySelector(sel); };
   var listEl = $('#unitlist'), hintEl = $('#hint'), modalEl = $('#modal'), sheetEl = $('#sheet');
+  var pmodalEl = $('#pmodal'), psheetEl = $('#psheet');
+  var openUnitId = null, openProductId = null;
 
   function showHint(html) { hintEl.innerHTML = html; hintEl.classList.add('show'); }
   function hideHint() { hintEl.classList.remove('show'); }
 
+  function esc(str) {
+    return String(str === undefined || str === null ? '' : str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   function toast(msg, kind) {
-    var t = document.createElement('div');
-    t.className = 'toast ' + (kind || '');
-    t.innerHTML = msg;
-    $('#toasts').appendChild(t);
-    setTimeout(function () { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 3200);
-    setTimeout(function () { t.remove(); }, 3600);
+    var el = document.createElement('div');
+    el.className = 'toast ' + (kind || '');
+    el.innerHTML = msg;
+    $('#toasts').appendChild(el);
+    setTimeout(function () { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, 3200);
+    setTimeout(function () { el.remove(); }, 3600);
   }
 
   function renderStats() {
     var a = 0, b = 0, r = 0;
-    UNITS.forEach(function (u) { var s = statusOf(u); if (s === 'available') a++; else if (s === 'booked') b++; else r++; });
+    UNITS.forEach(function (u) { var st = statusOf(u); if (st === 'available') a++; else if (st === 'booked') b++; else r++; });
     $('#st-total').textContent = UNITS.length;
     $('#st-avail').textContent = a;
     $('#st-booked').textContent = b;
@@ -838,43 +1281,72 @@
     $('#st-occ').textContent = Math.round(((b + r) / UNITS.length) * 100) + '%';
   }
 
+  /* ------------------------------ daftar space ------------------------------ */
   function renderList() {
+    if (activeTab === 'products') return renderProductList();
     var q = searchTerm.trim().toLowerCase();
     var rows = UNITS.filter(function (u) {
       var st = statusOf(u);
       if (activeFilter !== 'all' && st !== activeFilter) return false;
       if (!q) return true;
-      var hay = (u.id + ' ' + u.name + ' ' + u.cat + ' ' + (u.tenant || '') + ' ' + u.tagline).toLowerCase();
+      var hay = (u.id + ' ' + unitName(u) + ' ' + L(u.cat) + ' ' + (u.tenant || '') + ' ' + L(u.tagline)).toLowerCase();
       return hay.indexOf(q) !== -1;
     });
     listEl.innerHTML = '';
-    if (!rows.length) {
-      listEl.innerHTML = '<div class="empty">Tidak ada space yang cocok dengan filter ini.</div>';
-      return;
-    }
+    if (!rows.length) { listEl.innerHTML = '<div class="empty">' + t('list.empty') + '</div>'; return; }
     rows.forEach(function (u) {
-      var st = statusOf(u), meta = STATUS[st];
+      var st = statusOf(u);
       var card = document.createElement('div');
       card.className = 'card';
       card.innerHTML =
-        '<div class="row"><h3>' + u.name + '</h3><span class="badge ' + st + '">' + meta.label + '</span></div>' +
-        '<div class="cat">' + u.cat + (u.tenant && st === 'rented' ? ' &middot; ' + u.tenant : '') + '</div>' +
-        '<div class="price">' + shortRp(u.monthly) + ' <small>/ bulan</small></div>' +
-        '<div class="meta">' + u.width + ' &times; ' + u.depth + ' m &middot; ' + u.area + ' m&sup2; &middot; ' + u.tagline + '</div>' +
+        '<div class="row"><h3>' + unitName(u) + '</h3><span class="badge ' + st + '">' + t('status.' + st) + '</span></div>' +
+        '<div class="cat">' + esc(L(u.cat)) + (u.tenant && st === 'rented' ? ' &middot; ' + esc(u.tenant) : '') + '</div>' +
+        '<div class="price">' + shortRp(u.monthly) + ' <small>' + t('card.perMonth') + '</small></div>' +
+        '<div class="meta">' + u.width + ' &times; ' + u.depth + ' m &middot; ' + u.area + ' m&sup2; &middot; ' + esc(L(u.tagline)) +
+          (u.products.length ? ' &middot; ' + u.products.length + ' × ' + t('tab.products').toLowerCase() : '') + '</div>' +
         '<div class="acts">' +
-          '<button class="btn ghost" data-go="' + u.id + '">Kunjungi</button>' +
+          '<button class="btn ghost" data-go="' + u.id + '">' + t('card.visit') + '</button>' +
           '<button class="btn ' + (st === 'available' ? 'primary' : 'ghost') + '" data-open="' + u.id + '">' +
-            (st === 'available' ? 'Sewa' : 'Detail') + '</button>' +
+            (st === 'available' ? t('card.rent') : t('card.details')) + '</button>' +
+        '</div>';
+      listEl.appendChild(card);
+    });
+  }
+
+  /* ------------------------------ daftar produk ----------------------------- */
+  function renderProductList() {
+    var q = searchTerm.trim().toLowerCase();
+    var rows = PRODUCTS.filter(function (pr) {
+      if (!q) return true;
+      var hay = (L(pr.name) + ' ' + (pr.unit.tenant || '') + ' ' + L(pr.unit.cat) + ' ' + pr.unit.id).toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+    listEl.innerHTML = '';
+    if (!rows.length) { listEl.innerHTML = '<div class="empty">' + t('list.emptyProducts') + '</div>'; return; }
+    rows.forEach(function (pr) {
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        '<div class="row"><h3>' + esc(L(pr.name)) + '</h3></div>' +
+        '<div class="shop"><span class="dot" style="background:' + accentColor(pr.unit.cat) + '"></span>' +
+          esc(pr.unit.tenant) + ' &middot; ' + unitName(pr.unit) + '</div>' +
+        '<div class="price">' + rupiah(pr.price) + '</div>' +
+        '<div class="meta">' + esc(L(pr.desc)) + '</div>' +
+        '<div class="acts">' +
+          '<button class="btn ghost" data-go="' + pr.unit.id + '">' + t('p.visitShop') + '</button>' +
+          '<button class="btn primary" data-product="' + pr.id + '">' + t('card.viewAr') + '</button>' +
         '</div>';
       listEl.appendChild(card);
     });
   }
 
   listEl.addEventListener('click', function (ev) {
-    var go = ev.target.getAttribute && ev.target.getAttribute('data-go');
-    var op = ev.target.getAttribute && ev.target.getAttribute('data-open');
+    var el = ev.target;
+    if (!el.getAttribute) return;
+    var go = el.getAttribute('data-go'), op = el.getAttribute('data-open'), pd = el.getAttribute('data-product');
     if (go) gotoUnit(go);
     if (op) openUnit(op);
+    if (pd) openProduct(pd);
   });
 
   /* ------------------------------- teleportasi ------------------------------ */
@@ -899,115 +1371,195 @@
     var lc = cam.components['look-controls'];
     if (lc) { lc.yawObject.rotation.y = Math.atan2(-dx, -dz); lc.pitchObject.rotation.x = 0; }
     if (window.matchMedia('(max-width: 820px)').matches) $('#sidebar').classList.add('hidden');
-    toast('Kamu dipindahkan ke depan <b>' + u.name + '</b>');
+    modalEl.classList.remove('open'); pmodalEl.classList.remove('open');
+    toast(t('toast.teleport', { name: unitName(u) }));
   }
 
   /* ---------------------------- panel detail unit --------------------------- */
-  var CATEGORY_OPTIONS = ['Food & Beverage', 'Fashion & Apparel', 'Elektronik & Gadget', 'Kecantikan & Spa',
-    'Sport & Wellness', 'Anak & Mainan', 'Buku & Hobi', 'Home & Living', 'Jasa & Layanan', 'Otomotif', 'Lainnya'];
+  var CATEGORY_OPTIONS = [C.food, C.fashion, C.tech, C.beauty, C.well, C.kids, C.books, C.home, C.service, C.auto,
+    { k: 'other', en: 'Other', id: 'Lainnya' }];
 
   function openUnit(id) {
     var u = BY_ID[id];
     if (!u) return;
-    var st = statusOf(u), meta = STATUS[st];
-    var facil = u.facilities.map(function (f) { return '<em>' + f + '</em>'; }).join('');
+    openUnitId = id;
+    var st = statusOf(u);
+    var facil = L(u.facilities).map(function (f) { return '<em>' + esc(f) + '</em>'; }).join('');
     var head =
       '<div class="sheet-head">' +
         '<div style="flex:1">' +
-          '<h2>' + u.name + ' <span class="badge ' + st + '">' + meta.label + '</span></h2>' +
-          '<p>' + u.cat + ' &middot; ' + u.tagline + '</p>' +
+          '<h2>' + unitName(u) + ' <span class="badge ' + st + '">' + t('status.' + st) + '</span></h2>' +
+          '<p>' + esc(L(u.cat)) + ' &middot; ' + esc(L(u.tagline)) + '</p>' +
         '</div>' +
         '<button class="btn ghost" data-close>&times;</button>' +
       '</div>';
+    var per = '<small style="font-weight:500;color:var(--muted)"> ' + t('sheet.perMonthShort') + '</small>';
     var kv =
       '<div class="kv">' +
-        '<div><span>Luas</span><b>' + u.area + ' m&sup2;</b></div>' +
-        '<div><span>Dimensi</span><b>' + u.width + ' &times; ' + u.depth + ' m</b></div>' +
-        '<div><span>Harga sewa</span><b>' + shortRp(u.monthly) + '<small style="font-weight:500;color:var(--muted)"> /bln</small></b></div>' +
-        '<div><span>Service charge</span><b>' + shortRp(u.service) + '<small style="font-weight:500;color:var(--muted)"> /bln</small></b></div>' +
+        '<div><span>' + t('sheet.area') + '</span><b>' + u.area + ' m&sup2;</b></div>' +
+        '<div><span>' + t('sheet.dims') + '</span><b>' + u.width + ' &times; ' + u.depth + ' m</b></div>' +
+        '<div><span>' + t('sheet.rent') + '</span><b>' + shortRp(u.monthly) + per + '</b></div>' +
+        '<div><span>' + t('sheet.service') + '</span><b>' + shortRp(u.service) + per + '</b></div>' +
       '</div>' +
       '<div class="facil">' + facil + '</div>';
+
+    var prodBlock = '';
+    if (u.products.length) {
+      prodBlock = '<label style="display:block;font-size:11.5px;color:var(--muted);margin:0 0 6px;font-weight:600">' +
+        t('sheet.products') + '</label><div class="facil">' +
+        u.products.map(function (pr) {
+          return '<em style="cursor:pointer;border-color:var(--stroke-strong)" data-product="' + pr.id + '">' +
+            esc(L(pr.name)) + ' &middot; ' + shortRp(pr.price) + ' &middot; ' + t('card.viewAr') + '</em>';
+        }).join('') + '</div>';
+    }
 
     var body;
     if (st === 'available') {
       body = kv + rentFormHTML(u);
     } else if (st === 'booked') {
-      var b = bookings[u.id];
-      body = kv +
+      var bk = bookings[u.id];
+      body = kv + prodBlock +
         '<div class="summary">' +
-          '<div class="line"><span>Penyewa</span><b>' + esc(b.brand) + '</b></div>' +
-          '<div class="line"><span>Kategori usaha</span><b>' + esc(b.category) + '</b></div>' +
-          '<div class="line"><span>Kontak</span><b>' + esc(b.contact) + '</b></div>' +
-          '<div class="line"><span>Durasi</span><b>' + b.months + ' bulan</b></div>' +
-          '<div class="line"><span>Mulai</span><b>' + b.start + '</b></div>' +
-          '<div class="line"><span>Berakhir</span><b>' + b.end + '</b></div>' +
-          (b.note ? '<div class="line"><span>Catatan</span><b>' + esc(b.note) + '</b></div>' : '') +
-          '<div class="line total"><span>Total kontrak</span><b>' + rupiah(b.total) + '</b></div>' +
+          '<div class="line"><span>' + t('b.tenant') + '</span><b>' + esc(bk.brand) + '</b></div>' +
+          '<div class="line"><span>' + t('b.category') + '</span><b>' + esc(bk.category) + '</b></div>' +
+          '<div class="line"><span>' + t('b.contact') + '</span><b>' + esc(bk.contact) + '</b></div>' +
+          '<div class="line"><span>' + t('b.duration') + '</span><b>' + bk.months + ' ' + t('form.monthsUnit') + '</b></div>' +
+          '<div class="line"><span>' + t('b.start') + '</span><b>' + bk.start + '</b></div>' +
+          '<div class="line"><span>' + t('b.end') + '</span><b>' + bk.end + '</b></div>' +
+          (bk.note ? '<div class="line"><span>' + t('b.note') + '</span><b>' + esc(bk.note) + '</b></div>' : '') +
+          '<div class="line total"><span>' + t('b.total') + '</span><b>' + rupiah(bk.total) + '</b></div>' +
         '</div>' +
-        '<p class="note">Pesanan tersimpan di perangkat ini. Tim leasing akan menghubungi kontak di atas untuk verifikasi dokumen dan penandatanganan kontrak.</p>';
+        '<p class="note">' + t('sheet.bookedNote') + '</p>';
     } else {
-      body = kv +
+      body = kv + prodBlock +
         '<div class="summary">' +
-          '<div class="line"><span>Tenant</span><b>' + esc(u.tenant) + '</b></div>' +
-          '<div class="line"><span>Status</span><b>Kontrak aktif</b></div>' +
-          '<div class="line"><span>Daftar tunggu</span><b>' + (waitlist[u.id] || 0) + ' calon penyewa</b></div>' +
+          '<div class="line"><span>' + t('sheet.tenant') + '</span><b>' + esc(u.tenant) + '</b></div>' +
+          '<div class="line"><span>' + t('sheet.statusLabel') + '</span><b>' + t('sheet.contractActive') + '</b></div>' +
+          '<div class="line"><span>' + t('sheet.waitlist') + '</span><b>' + (waitlist[u.id] || 0) + ' ' + t('sheet.waitlistUnit') + '</b></div>' +
         '</div>' +
-        '<p class="note">Unit ini sedang disewa. Kamu bisa masuk daftar tunggu — kami kabari begitu unit kosong atau ada unit sejenis yang tersedia.</p>';
+        '<p class="note">' + t('sheet.rentedNote') + '</p>';
     }
 
     var foot;
     if (st === 'available') {
-      foot = '<button class="btn ghost" data-go2="' + u.id + '">Kunjungi Unit</button>' +
-             '<button class="btn ghost" data-close>Tutup</button>' +
-             '<button class="btn primary" data-submit="' + u.id + '">Ajukan Sewa</button>';
+      foot = '<button class="btn ghost" data-go2="' + u.id + '">' + t('sheet.visitUnit') + '</button>' +
+             '<button class="btn ghost" data-close>' + t('sheet.close') + '</button>' +
+             '<button class="btn primary" data-submit="' + u.id + '">' + t('sheet.submit') + '</button>';
     } else if (st === 'booked') {
-      foot = '<button class="btn ghost" data-go2="' + u.id + '">Kunjungi Unit</button>' +
-             '<button class="btn danger" data-cancel="' + u.id + '">Batalkan Pesanan</button>' +
-             '<button class="btn ghost" data-close>Tutup</button>';
+      foot = '<button class="btn ghost" data-go2="' + u.id + '">' + t('sheet.visitUnit') + '</button>' +
+             '<button class="btn danger" data-cancel="' + u.id + '">' + t('sheet.cancel') + '</button>' +
+             '<button class="btn ghost" data-close>' + t('sheet.close') + '</button>';
     } else {
-      foot = '<button class="btn ghost" data-go2="' + u.id + '">Kunjungi Unit</button>' +
-             '<button class="btn primary" data-wait="' + u.id + '">Masuk Daftar Tunggu</button>' +
-             '<button class="btn ghost" data-close>Tutup</button>';
+      foot = '<button class="btn ghost" data-go2="' + u.id + '">' + t('sheet.visitUnit') + '</button>' +
+             '<button class="btn primary" data-wait="' + u.id + '">' + t('sheet.waitlistBtn') + '</button>' +
+             '<button class="btn ghost" data-close>' + t('sheet.close') + '</button>';
     }
 
     sheetEl.innerHTML = head + '<div class="sheet-body">' + body + '</div><div class="sheet-foot">' + foot + '</div>';
     modalEl.classList.add('open');
+    hideHint();
     if (st === 'available') bindForm(u);
   }
 
-  function esc(s) {
-    return String(s === undefined || s === null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  /* ------------------- panel produk: pratinjau 3D + view in AR --------------- */
+  var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  function openProduct(id) {
+    var pr = PROD_BY_ID[id];
+    if (!pr) return;
+    openProductId = id;
+    var u = pr.unit;
+    var specs = L(pr.specs).map(function (sp) { return '<em>' + esc(sp) + '</em>'; }).join('');
+    psheetEl.innerHTML =
+      '<div class="sheet-head">' +
+        '<div style="flex:1">' +
+          '<h2>' + esc(L(pr.name)) + '</h2>' +
+          '<p>' + t('p.soldBy') + ' ' + esc(u.tenant) + ' &middot; ' + unitName(u) + ' &middot; ' + esc(L(u.cat)) + '</p>' +
+        '</div>' +
+        '<button class="btn ghost" data-pclose>&times;</button>' +
+      '</div>' +
+      '<div class="sheet-body">' +
+        '<div class="mv-wrap">' +
+          '<model-viewer id="mv" src="' + pr.model + '" alt="' + esc(L(pr.name)) + '"' +
+            ' camera-controls auto-rotate auto-rotate-delay="800" shadow-intensity="1" exposure="1.05"' +
+            ' environment-image="neutral" ar ar-modes="webxr scene-viewer quick-look" ar-scale="auto"' +
+            ' touch-action="pan-y" loading="eager">' +
+            '<button class="ar-btn" slot="ar-button">' + t('p.viewAr') + '</button>' +
+          '</model-viewer>' +
+          '<p class="mv-note" id="mv-note"></p>' +
+        '</div>' +
+        '<div class="price-big">' + rupiah(pr.price) + '</div>' +
+        '<p class="note" style="margin:0 0 12px">' + esc(L(pr.desc)) + '</p>' +
+        '<label style="display:block;font-size:11.5px;color:var(--muted);margin:0 0 6px;font-weight:600">' + t('p.specs') + '</label>' +
+        '<div class="facil">' + specs + '</div>' +
+        '<p class="note">' + t('p.buyNote') + '</p>' +
+      '</div>' +
+      '<div class="sheet-foot">' +
+        '<button class="btn ghost" data-go3="' + u.id + '">' + t('p.visitShop') + '</button>' +
+        '<button class="btn ghost" data-pclose>' + t('sheet.close') + '</button>' +
+      '</div>';
+    pmodalEl.classList.add('open');
+    hideHint();
+    checkAr();
   }
 
+  // model-viewer menyembunyikan tombol AR sendiri bila perangkat tidak mendukung,
+  // jadi catatan di bawahnya yang menjelaskan alasannya
+  function checkAr() {
+    var note = $('#mv-note'), mv = $('#mv');
+    if (!note || !mv) return;
+    var done = false;
+    var tell = function () {
+      if (done) return;
+      done = true;
+      if (!window.customElements || !customElements.get('model-viewer')) { note.textContent = t('p.mvFail'); return; }
+      note.innerHTML = mv.canActivateAR ? '' : t('p.arUnsupported') + (IS_IOS ? ' ' + t('p.arIos') : '');
+    };
+    if (window.customElements && customElements.whenDefined) {
+      customElements.whenDefined('model-viewer').then(function () { setTimeout(tell, 300); });
+    }
+    setTimeout(tell, 4000);   // model-viewer gagal dimuat (offline / CDN diblokir)
+  }
+
+  pmodalEl.addEventListener('click', function (ev) {
+    var el = ev.target;
+    if (el === pmodalEl || (el.hasAttribute && el.hasAttribute('data-pclose'))) {
+      pmodalEl.classList.remove('open'); openProductId = null; return;
+    }
+    var go = el.getAttribute && el.getAttribute('data-go3');
+    if (go) { pmodalEl.classList.remove('open'); openProductId = null; gotoUnit(go); }
+  });
+
+  /* ------------------------------ form sewa unit ---------------------------- */
   function rentFormHTML(u) {
     var today = new Date();
     var start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 14);
     var iso = start.toISOString().slice(0, 10);
     var cats = CATEGORY_OPTIONS.map(function (c) {
-      return '<option value="' + c + '"' + (c === u.cat ? ' selected' : '') + '>' + c + '</option>';
+      return '<option value="' + esc(L(c)) + '"' + (c.k === u.cat.k ? ' selected' : '') + '>' + esc(L(c)) + '</option>';
     }).join('');
     var months = [3, 6, 12, 24, 36].map(function (m) {
       var d = DISCOUNTS[m];
-      return '<option value="' + m + '"' + (m === 12 ? ' selected' : '') + '>' + m + ' bulan' +
-        (d ? ' (diskon ' + Math.round(d * 100) + '%)' : '') + '</option>';
+      return '<option value="' + m + '"' + (m === 12 ? ' selected' : '') + '>' + m + ' ' + t('form.monthsUnit') +
+        (d ? ' (' + t('form.discount') + ' ' + Math.round(d * 100) + '%)' : '') + '</option>';
     }).join('');
     return '<form id="rent-form" autocomplete="off">' +
-      '<div class="f"><label for="f-brand">Nama brand / usaha *</label>' +
-        '<input id="f-brand" name="brand" required maxlength="60" placeholder="contoh: Kedai Rasa Nusantara"></div>' +
+      '<div class="f"><label for="f-brand">' + t('form.brand') + '</label>' +
+        '<input id="f-brand" name="brand" required maxlength="60" placeholder="' + t('form.brandPh') + '"></div>' +
       '<div class="grid2">' +
-        '<div class="f"><label for="f-cat">Kategori usaha</label><select id="f-cat" name="category">' + cats + '</select></div>' +
-        '<div class="f"><label for="f-contact">WhatsApp / Email *</label>' +
-          '<input id="f-contact" name="contact" required maxlength="80" placeholder="0812xxxxxxx / nama@email.com"></div>' +
+        '<div class="f"><label for="f-cat">' + t('form.category') + '</label><select id="f-cat" name="category">' + cats + '</select></div>' +
+        '<div class="f"><label for="f-contact">' + t('form.contact') + '</label>' +
+          '<input id="f-contact" name="contact" required maxlength="80" placeholder="' + t('form.contactPh') + '"></div>' +
       '</div>' +
       '<div class="grid2">' +
-        '<div class="f"><label for="f-months">Durasi sewa</label><select id="f-months" name="months">' + months + '</select></div>' +
-        '<div class="f"><label for="f-start">Mulai sewa</label><input id="f-start" name="start" type="date" value="' + iso + '"></div>' +
+        '<div class="f"><label for="f-months">' + t('form.months') + '</label><select id="f-months" name="months">' + months + '</select></div>' +
+        '<div class="f"><label for="f-start">' + t('form.start') + '</label><input id="f-start" name="start" type="date" value="' + iso + '"></div>' +
       '</div>' +
-      '<div class="f"><label for="f-note">Catatan kebutuhan (opsional)</label>' +
-        '<textarea id="f-note" name="note" maxlength="240" placeholder="contoh: butuh saluran air + exhaust untuk dapur"></textarea></div>' +
+      '<div class="f"><label for="f-note">' + t('form.note') + '</label>' +
+        '<textarea id="f-note" name="note" maxlength="240" placeholder="' + t('form.notePh') + '"></textarea></div>' +
       '<div class="summary" id="f-summary"></div>' +
-      '<p class="note">Dengan mengajukan sewa, unit langsung ditandai <b>Dipesan</b> di denah mall. Pesanan disimpan lokal di browser ini (demo leasing) dan bisa dibatalkan kapan saja.</p>' +
+      '<p class="note">' + t('form.disclaimer') + '</p>' +
     '</form>';
   }
 
@@ -1037,12 +1589,13 @@
       var months = parseInt(form.months.value, 10) || 12;
       var c = calcRent(u, months);
       sum.innerHTML =
-        '<div class="line"><span>Sewa ' + shortRp(u.monthly) + ' + service ' + shortRp(u.service) + '</span><b>' + rupiah(c.perMonth) + ' / bln</b></div>' +
-        '<div class="line"><span>Durasi</span><b>' + months + ' bulan</b></div>' +
-        (c.disc ? '<div class="line"><span>Diskon kontrak panjang</span><b>- ' + rupiah(c.discount) + '</b></div>' : '') +
-        '<div class="line"><span>Deposit (' + DEPOSIT_MONTHS + ' bln, dikembalikan)</span><b>' + rupiah(c.deposit) + '</b></div>' +
-        '<div class="line"><span>Kontrak berakhir</span><b>' + addMonths(form.start.value, months) + '</b></div>' +
-        '<div class="line total"><span>Total kontrak</span><b>' + rupiah(c.total) + '</b></div>';
+        '<div class="line"><span>' + t('sum.rentService', { rent: shortRp(u.monthly), service: shortRp(u.service) }) +
+          '</span><b>' + rupiah(c.perMonth) + ' ' + t('sum.perMonth') + '</b></div>' +
+        '<div class="line"><span>' + t('sum.duration') + '</span><b>' + months + ' ' + t('form.monthsUnit') + '</b></div>' +
+        (c.disc ? '<div class="line"><span>' + t('sum.discount') + '</span><b>- ' + rupiah(c.discount) + '</b></div>' : '') +
+        '<div class="line"><span>' + t('sum.deposit', { n: DEPOSIT_MONTHS }) + '</span><b>' + rupiah(c.deposit) + '</b></div>' +
+        '<div class="line"><span>' + t('sum.end') + '</span><b>' + addMonths(form.start.value, months) + '</b></div>' +
+        '<div class="line total"><span>' + t('sum.total') + '</span><b>' + rupiah(c.total) + '</b></div>';
     }
     form.addEventListener('input', refresh);
     form.addEventListener('change', refresh);
@@ -1058,44 +1611,85 @@
     var c = calcRent(u, months);
     var start = form.start.value || new Date().toISOString().slice(0, 10);
     bookings[u.id] = {
-      unit: u.id, unitName: u.name, brand: form.brand.value.trim(), category: form.category.value,
+      unit: u.id, unitName: unitName(u), brand: form.brand.value.trim(), category: form.category.value,
       contact: form.contact.value.trim(), months: months, start: start, end: addMonths(start, months),
       note: form.note.value.trim(), area: u.area, monthly: u.monthly, service: u.service,
       deposit: c.deposit, total: c.total, createdAt: new Date().toISOString()
     };
     saveJSON(LS_KEY, bookings);
     updateUnitVisual(u); renderList(); renderStats(); drawMap();
-    modalEl.classList.remove('open');
-    toast('Pengajuan sewa <b>' + u.name + '</b> tersimpan. Total ' + rupiah(c.total) + ' untuk ' + months + ' bulan.', 'good');
+    modalEl.classList.remove('open'); openUnitId = null;
+    toast(t('toast.booked', { name: unitName(u), total: rupiah(c.total), months: months }), 'good');
   }
 
   function cancelBooking(id) {
     var u = BY_ID[id];
     if (!u || !bookings[id]) return;
-    if (!window.confirm('Batalkan pesanan untuk ' + u.name + '?')) return;
+    if (!window.confirm(t('confirm.cancel', { name: unitName(u) }))) return;
     delete bookings[id];
     saveJSON(LS_KEY, bookings);
     updateUnitVisual(u); renderList(); renderStats(); drawMap();
-    modalEl.classList.remove('open');
-    toast('Pesanan ' + u.name + ' dibatalkan. Unit kembali tersedia.', 'warn');
+    modalEl.classList.remove('open'); openUnitId = null;
+    toast(t('toast.cancelled', { name: unitName(u) }), 'warn');
   }
 
   modalEl.addEventListener('click', function (ev) {
-    var t = ev.target;
-    if (t === modalEl || (t.hasAttribute && t.hasAttribute('data-close'))) { modalEl.classList.remove('open'); return; }
-    if (!t.getAttribute) return;
-    var sub = t.getAttribute('data-submit'), can = t.getAttribute('data-cancel'),
-        go = t.getAttribute('data-go2'), wait = t.getAttribute('data-wait');
+    var el = ev.target;
+    if (el === modalEl || (el.hasAttribute && el.hasAttribute('data-close'))) {
+      modalEl.classList.remove('open'); openUnitId = null; return;
+    }
+    if (!el.getAttribute) return;
+    var sub = el.getAttribute('data-submit'), can = el.getAttribute('data-cancel'),
+        go = el.getAttribute('data-go2'), wait = el.getAttribute('data-wait'),
+        pd = el.getAttribute('data-product');
     if (sub) submitRent(sub);
     if (can) cancelBooking(can);
-    if (go) { modalEl.classList.remove('open'); gotoUnit(go); }
+    if (go) { modalEl.classList.remove('open'); openUnitId = null; gotoUnit(go); }
+    if (pd) { modalEl.classList.remove('open'); openUnitId = null; openProduct(pd); }
     if (wait) {
       waitlist[wait] = (waitlist[wait] || 0) + 1;
       saveJSON(LS_WAIT, waitlist);
-      modalEl.classList.remove('open');
-      toast('Kamu masuk daftar tunggu ' + BY_ID[wait].name + '.', 'good');
+      modalEl.classList.remove('open'); openUnitId = null;
+      toast(t('toast.waitlist', { name: unitName(BY_ID[wait]) }), 'good');
     }
   });
+
+  /* -------------------------------- ganti bahasa ---------------------------- */
+  function applyLang(next) {
+    lang = (next === 'id') ? 'id' : 'en';
+    try { localStorage.setItem(LS_LANG, lang); } catch (e) {}
+    document.documentElement.setAttribute('lang', lang);
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function (el) {
+      el.innerHTML = t(el.getAttribute('data-i18n'));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-placeholder]'), function (el) {
+      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#langseg button'), function (el) {
+      el.setAttribute('aria-pressed', String(el.getAttribute('data-lang') === lang));
+    });
+    $('#search').setAttribute('placeholder', t(activeTab === 'products' ? 'search.products' : 'search.spaces'));
+
+    var wl = $('#welcome-list');
+    if (wl) {
+      wl.innerHTML = '';
+      ['welcome.1', 'welcome.2', 'welcome.3', 'welcome.4', 'welcome.5', 'welcome.6'].forEach(function (k) {
+        var li = document.createElement('li');
+        li.innerHTML = t(k);
+        wl.appendChild(li);
+      });
+    }
+
+    // teks di dalam dunia 3D
+    I18N_3D.forEach(function (it) { it.el.setAttribute('value', t(it.key)); });
+    PRODUCT_LABELS.forEach(function (it) { refreshProductLabel(it.el, it.product); });
+    UNITS.forEach(updateUnitVisual);
+
+    renderStats(); renderList(); drawMap();
+    if (openUnitId && modalEl.classList.contains('open')) openUnit(openUnitId);
+    if (openProductId && pmodalEl.classList.contains('open')) openProduct(openProductId);
+  }
 
   /* --------------------------------- denah ---------------------------------- */
   var canvas = $('#minimap'), ctx = canvas.getContext('2d');
@@ -1164,7 +1758,7 @@
     var cam = $('#cam');
     if (!cam) return;
     if (controls) controls.place(x, z); else cam.object3D.position.set(x, 1.6, z);
-    toast('Berpindah ke titik ' + Math.round(cam.object3D.position.x) + ', ' + Math.round(cam.object3D.position.z));
+    toast(t('toast.moved', { x: Math.round(cam.object3D.position.x), z: Math.round(cam.object3D.position.z) }));
   });
 
   /* -------------------------------- joystick -------------------------------- */
@@ -1195,7 +1789,7 @@
   /* ------------------------------ ekspor / reset ---------------------------- */
   function exportBookings() {
     var rows = Object.keys(bookings).map(function (k) { return bookings[k]; });
-    if (!rows.length) { toast('Belum ada pesanan untuk diekspor.', 'warn'); return; }
+    if (!rows.length) { toast(t('toast.noBookings'), 'warn'); return; }
     var payload = {
       mall: 'Wolfpup Virtual Mall', floor: 'Ground Floor',
       exportedAt: new Date().toISOString(), currency: 'IDR', bookings: rows
@@ -1206,21 +1800,38 @@
     a.download = 'pesanan-sewa-mall.json';
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
-    toast('Mengunduh ' + rows.length + ' pesanan.', 'good');
+    toast(t('toast.exported', { n: rows.length }), 'good');
   }
 
   function resetBookings() {
-    if (!Object.keys(bookings).length) { toast('Belum ada pesanan tersimpan.', 'warn'); return; }
-    if (!window.confirm('Hapus semua pesanan sewa yang tersimpan di browser ini?')) return;
+    if (!Object.keys(bookings).length) { toast(t('toast.noBookings2'), 'warn'); return; }
+    if (!window.confirm(t('confirm.reset'))) return;
     bookings = {};
     saveJSON(LS_KEY, bookings);
     UNITS.forEach(updateUnitVisual);
     renderList(); renderStats(); drawMap();
-    toast('Semua pesanan dihapus.', 'warn');
+    toast(t('toast.reset'), 'warn');
   }
 
   /* --------------------------------- init ----------------------------------- */
   function initUI() {
+    $('#langseg').addEventListener('click', function (e) {
+      var l = e.target.getAttribute && e.target.getAttribute('data-lang');
+      if (l && l !== lang) applyLang(l);
+    });
+    $('#tabs').addEventListener('click', function (e) {
+      var tab = e.target.getAttribute && e.target.getAttribute('data-tab');
+      if (!tab || tab === activeTab) return;
+      activeTab = tab;
+      Array.prototype.forEach.call(this.querySelectorAll('button'), function (b) {
+        b.setAttribute('aria-pressed', String(b.getAttribute('data-tab') === tab));
+      });
+      $('#filters').style.display = tab === 'products' ? 'none' : '';
+      $('#side-foot').style.display = tab === 'products' ? 'none' : '';
+      $('#search').value = ''; searchTerm = '';
+      $('#search').setAttribute('placeholder', t(tab === 'products' ? 'search.products' : 'search.spaces'));
+      renderList();
+    });
     $('#btn-list').addEventListener('click', function () { $('#sidebar').classList.toggle('hidden'); });
     $('#btn-map').addEventListener('click', function () { $('#mapwrap').classList.toggle('hidden'); });
     $('#btn-help').addEventListener('click', function () { $('#welcome').style.display = 'grid'; });
@@ -1243,9 +1854,11 @@
       if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
       var k = e.key.toLowerCase();
       if (k === 'escape') {
-        if (modalEl.classList.contains('open')) modalEl.classList.remove('open');
+        if (pmodalEl.classList.contains('open')) { pmodalEl.classList.remove('open'); openProductId = null; }
+        else if (modalEl.classList.contains('open')) { modalEl.classList.remove('open'); openUnitId = null; }
         else if ($('#welcome').style.display !== 'none') $('#welcome').style.display = 'none';
-      } else if (k === 'e' && hovered) { openUnit(hovered.id); }
+      } else if (k === 'e' && hoveredProduct) { openProduct(hoveredProduct.id); }
+      else if (k === 'e' && hovered) { openUnit(hovered.id); }
       else if (k === 'm') { $('#mapwrap').classList.toggle('hidden'); }
       else if (k === 'l') { $('#sidebar').classList.toggle('hidden'); }
     });
@@ -1263,12 +1876,15 @@
   }
 
   function init() {
+    var saved = null;
+    try { saved = localStorage.getItem(LS_LANG); } catch (e) {}
+    lang = saved === 'id' ? 'id' : 'en';     // bahasa default: English
+
     buildData();
     buildStructure();
     buildUnits();
     initUI();
-    renderList();
-    renderStats();
+    applyLang(lang);
     // pastikan komponen jalan kaki aktif (didaftarkan setelah scene di-parse)
     var cam = document.getElementById('cam');
     if (cam) cam.setAttribute('mall-controls', '');
