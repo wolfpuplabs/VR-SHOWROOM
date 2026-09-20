@@ -82,6 +82,35 @@ Untuk mencoba **AR di HP**, halaman harus diakses lewat **HTTPS** (atau `localho
 Scene Viewer dan WebXR menolak origin `http://` biasa. Cara tercepat: deploy ke hosting
 statis apa pun (GitHub Pages, Netlify, Vercel) lalu buka `mall.html` dari HP.
 
+## Auto-merge
+
+`.github/workflows/auto-merge.yml` membuat **setiap PR ke `main` ter-merge otomatis
+(squash) begitu semua check-nya hijau**. Workflow tidak pernah meng-checkout kode dari
+PR — hanya memanggil API GitHub lewat `gh` — jadi aman dipakai dengan `pull_request_target`.
+
+Alur kerjanya: dipicu saat PR dibuka/di-push, saat check suite selesai, atau manual lewat
+**Actions → Auto-merge → Run workflow**. Kalau masih ada check berjalan, workflow menunggu
+sampai 30 menit; kalau ada yang gagal, PR dibiarkan terbuka. PR yang tertinggal dari `main`
+diperbarui dulu, PR konflik dilewati. Bila merge langsung ditolak (mis. `main` mewajibkan
+review), workflow menyalakan auto-merge bawaan GitHub sebagai gantinya.
+
+Dua prasyarat di **Settings** repo:
+
+1. **General → Pull Requests → Allow auto-merge** — supaya auto-merge bawaan GitHub
+   (termasuk fallback di atas) bisa dipakai
+2. **Actions → General → Workflow permissions → Read and write permissions** — tanpa ini
+   `GITHUB_TOKEN` tidak berhak melakukan merge
+
+Pengecualian dan penyetelan (lihat blok `env` di file workflow):
+
+| Perkara | Perilaku |
+| --- | --- |
+| Label `no-automerge` | PR itu dilewati auto-merge |
+| PR draft | Dilewati sampai ditandai *ready for review* |
+| PR dari fork | **Dilewati** (`ALLOW_FORKS: 'false'`). Menyalakannya berarti siapa pun yang membuka PR dari fork bisa menulis ke `main` |
+| Metode merge | `MERGE_METHOD: squash` (bisa `merge` / `rebase`) |
+| Batas tunggu check | `MAX_WAIT_MINUTES: '30'` |
+
 ## Struktur berkas
 
 ```
@@ -90,4 +119,5 @@ mall.html                      mall + leasing + product showcase (satu file)
 assets/Porsche 356B.glb        model showroom (dipakai juga oleh unit A4)
 assets/products/*.glb          model produk tenant untuk pratinjau 3D & AR
 tools/generate-product-models.py  generator model produk (trimesh)
+.github/workflows/auto-merge.yml  auto-merge PR ke main
 ```

@@ -1,0 +1,155 @@
+# Auto-merge: PR ke `main` di-merge otomatis begitu semua check hijau.
+#
+# Workflow ini TIDAK pernah meng-checkout kode dari PR — hanya memanggil API
+# GitHub lewat `gh` — jadi aman dipakai dengan `pull_request_target`.
+#
+# Pengaturan cepat (lihat env di bawah):
+#   MERGE_METHOD : squash | merge | rebase
+#   ALLOW_FORKS  : 'true' agar PR dari fork ikut di-merge otomatis
+#                  (default 'false' — siapa pun bisa membuka PR dari fork,
+#                  jadi menyalakannya berarti orang luar bisa menulis ke main)
+#   SKIP_LABEL   : label untuk mengecualikan satu PR dari auto-merge
+name: Auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+  check_suite:
+    types: [completed]
+  status:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Nomor PR (kosongkan untuk semua PR terbuka ke main)'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.number || github.event.check_suite.head_sha || github.event.sha || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  MERGE_METHOD: squash
+  ALLOW_FORKS: 'false'
+  SKIP_LABEL: no-automerge
+  BASE_BRANCH: main
+  MAX_WAIT_MINUTES: '30'
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Merge PR yang sudah siap
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.check_suite.head_sha || github.event.sha }}
+          INPUT_PR: ${{ github.event.inputs.pr }}
+        run: |
+          set -euo pipefail
+
+          # ---------- kumpulkan kandidat PR ----------
+          candidates() {
+            case "$EVENT" in
+              pull_request_target)
+                [ -n "${PR_NUMBER:-}" ] && echo "$PR_NUMBER"
+                ;;
+              check_suite|status)
+                [ -n "${HEAD_SHA:-}" ] || return 0
+                gh api "repos/$REPO/commits/$HEAD_SHA/pulls" \
+                  --jq '.[] | select(.state == "open") | .number' 2>/dev/null || true
+                ;;
+              workflow_dispatch)
+                if [ -n "${INPUT_PR:-}" ]; then
+                  echo "$INPUT_PR"
+                else
+                  gh pr list --repo "$REPO" --base "$BASE_BRANCH" --state open \
+                    --json number --jq '.[].number'
+                fi
+                ;;
+            esac
+          }
+
+          # ---------- proses satu PR ----------
+          handle() {
+            pr="$1"
+            deadline=$(( $(date +%s) + MAX_WAIT_MINUTES * 60 ))
+
+            while :; do
+              data=$(gh pr view "$pr" --repo "$REPO" --json \
+                number,state,isDraft,baseRefName,isCrossRepository,mergeable,mergeStateStatus,labels,statusCheckRollup)
+
+              state=$(jq -r '.state' <<<"$data")
+              draft=$(jq -r '.isDraft' <<<"$data")
+              base=$(jq -r '.baseRefName' <<<"$data")
+              fork=$(jq -r '.isCrossRepository' <<<"$data")
+              mergeable=$(jq -r '.mergeable' <<<"$data")
+              mstate=$(jq -r '.mergeStateStatus' <<<"$data")
+              skip=$(jq -r --arg l "$SKIP_LABEL" '[.labels[].name] | index($l) // "no"' <<<"$data")
+
+              [ "$state" = "OPEN" ]      || { echo "PR #$pr: status $state, dilewati."; return 0; }
+              [ "$draft" = "false" ]     || { echo "PR #$pr: masih draft, dilewati."; return 0; }
+              [ "$base" = "$BASE_BRANCH" ] || { echo "PR #$pr: base $base (bukan $BASE_BRANCH), dilewati."; return 0; }
+              [ "$skip" = "no" ]         || { echo "PR #$pr: berlabel $SKIP_LABEL, dilewati."; return 0; }
+              if [ "$fork" = "true" ] && [ "$ALLOW_FORKS" != "true" ]; then
+                echo "PR #$pr: dari fork dan ALLOW_FORKS=false, dilewati."; return 0
+              fi
+
+              if [ "$mergeable" = "CONFLICTING" ] || [ "$mstate" = "DIRTY" ]; then
+                echo "PR #$pr: ada konflik dengan $BASE_BRANCH, perlu diselesaikan manual."; return 0
+              fi
+
+              failing=$(jq '[.statusCheckRollup[]? | (.conclusion // .state // "") |
+                select(. == "FAILURE" or . == "ERROR" or . == "TIMED_OUT" or
+                       . == "CANCELLED" or . == "ACTION_REQUIRED" or . == "STARTUP_FAILURE")] | length' <<<"$data")
+              pending=$(jq '[.statusCheckRollup[]? |
+                select((.status? // "") == "QUEUED" or (.status? // "") == "IN_PROGRESS" or
+                       (.status? // "") == "PENDING" or (.state? // "") == "PENDING" or
+                       (.state? // "") == "EXPECTED")] | length' <<<"$data")
+
+              if [ "$failing" -gt 0 ]; then
+                echo "PR #$pr: $failing check gagal, tidak di-merge."; return 0
+              fi
+
+              if [ "$mstate" = "BEHIND" ]; then
+                echo "PR #$pr: tertinggal dari $BASE_BRANCH, memperbarui branch…"
+                gh pr update-branch "$pr" --repo "$REPO" || true
+                sleep 20; continue
+              fi
+
+              if [ "$pending" -gt 0 ]; then
+                if [ "$(date +%s)" -ge "$deadline" ]; then
+                  echo "PR #$pr: $pending check belum selesai setelah $MAX_WAIT_MINUTES menit, berhenti menunggu."; return 0
+                fi
+                echo "PR #$pr: menunggu $pending check yang masih jalan…"
+                sleep 30; continue
+              fi
+
+              echo "PR #$pr: semua check hijau, mencoba merge ($MERGE_METHOD)…"
+              if gh pr merge "$pr" --repo "$REPO" "--$MERGE_METHOD"; then
+                echo "PR #$pr: ter-merge."
+              elif gh pr merge "$pr" --repo "$REPO" "--$MERGE_METHOD" --auto; then
+                echo "PR #$pr: belum bisa di-merge sekarang (mis. menunggu review), auto-merge GitHub diaktifkan."
+              else
+                echo "PR #$pr: merge ditolak GitHub (mergeStateStatus=$mstate). Cek branch protection / izin."
+              fi
+              return 0
+            done
+          }
+
+          found=0
+          while read -r pr; do
+            [ -n "$pr" ] || continue
+            found=1
+            handle "$pr"
+          done < <(candidates)
+
+          [ "$found" = "1" ] || echo "Tidak ada PR yang perlu diproses untuk event $EVENT."
