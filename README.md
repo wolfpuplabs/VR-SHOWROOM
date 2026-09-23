@@ -28,14 +28,26 @@ proses build, hanya dua dependensi dari CDN: A-Frame (dunia 3D) dan `model-viewe
   produknya berdiri sebagai model 3D sungguhan di atas display, bukan gambar
 - Klik produk (di dunia 3D, dari daftar **Products**, atau dari panel unit) untuk membuka
   panel produk: pratinjau 3D yang bisa diputar, harga, deskripsi, dan spesifikasi
-- Tombol **View in AR / Lihat di AR** memakai [`<model-viewer>`](https://modelviewer.dev):
-  di Android lewat WebXR / Scene Viewer, produk bisa ditaruh langsung di ruangan nyata
-  dengan skala aslinya. Di desktop tombol AR otomatis disembunyikan dan diganti catatan
-- Model produk `.glb` ada di `assets/products/` (total ~130 KB) dan dibuat ulang lewat
-  `python3 tools/generate-product-models.py` (butuh `trimesh` + `numpy`).
-  Showroom A4 memakai model `Porsche 356B.glb` yang sudah ada di repo
-- Catatan iOS: Quick Look butuh berkas `.usdz`; tambahkan `ios-src` pada `<model-viewer>`
-  bila ingin AR di iPhone/iPad
+- Tombol **View in AR / Lihat di AR** memakai [`<model-viewer>`](https://modelviewer.dev)
+  dan jalan di dua platform: **Android** lewat WebXR / Scene Viewer (`.glb`) dan
+  **iPhone/iPad** lewat AR Quick Look (`.usdz`, atribut `ios-src`). Produk muncul di
+  ruangan nyata dengan ukuran aslinya — gelas kopi 13 cm tetap 13 cm, Porsche tetap 4 m.
+  Di desktop tombol AR otomatis disembunyikan dan diganti catatan
+- Model produk ada di `assets/products/`: `.glb` (~420 KB) untuk web/Android dan
+  `.usdz` (~980 KB) untuk iOS. Dibuat ulang lewat dua skrip:
+
+  ```bash
+  pip install trimesh numpy usd-core
+  python3 tools/generate-product-models.py   # bikin .glb produk
+  python3 tools/glb-to-usdz.py               # turunkan .usdz + miniatur Porsche 1:18
+  ```
+
+  Showroom A4 memakai `Porsche 356B.glb` yang sudah ada di repo, sekaligus jadi dua
+  produk: mobilnya sendiri dan miniatur 1:18 yang diturunkan otomatis dari model itu
+- Semua `.usdz` sudah Y-up, satuan meter, mandiri (tanpa berkas eksternal), dan memakai
+  `UsdPreviewSurface` sesuai syarat AR Quick Look
+- Kalau Quick Look tidak mau terbuka di iOS, biasanya soal MIME type `.usdz` di hosting.
+  Berkas `_headers` di root sudah mengatur ini untuk Netlify / Cloudflare Pages
 
 **Bahasa**
 
@@ -79,8 +91,8 @@ Membuka file lewat `file://` akan membuat model `.glb` gagal dimuat karena pemba
 jadi gunakan server statis sederhana seperti di atas.
 
 Untuk mencoba **AR di HP**, halaman harus diakses lewat **HTTPS** (atau `localhost`) —
-Scene Viewer dan WebXR menolak origin `http://` biasa. Cara tercepat: deploy ke hosting
-statis apa pun (GitHub Pages, Netlify, Vercel) lalu buka `mall.html` dari HP.
+Scene Viewer, WebXR, dan Quick Look menolak origin `http://` biasa. Cara tercepat: deploy
+ke hosting statis apa pun (GitHub Pages, Netlify, Vercel) lalu buka `mall.html` dari HP.
 
 ## Auto-merge
 
@@ -117,7 +129,11 @@ Pengecualian dan penyetelan (lihat blok `env` di file workflow):
 index.html                     showroom VR Porsche
 mall.html                      mall + leasing + product showcase (satu file)
 assets/Porsche 356B.glb        model showroom (dipakai juga oleh unit A4)
-assets/products/*.glb          model produk tenant untuk pratinjau 3D & AR
+assets/products/*.glb          model produk tenant (web + AR Android)
+assets/products/*.usdz         versi AR Quick Look untuk iPhone/iPad
+assets/Porsche 356B.usdz       versi AR Quick Look untuk mobil showroom
+_headers                       MIME type .usdz/.glb untuk Netlify / Cloudflare Pages
 tools/generate-product-models.py  generator model produk (trimesh)
+tools/glb-to-usdz.py              konverter .glb -> .usdz (usd-core)
 .github/workflows/auto-merge.yml  auto-merge PR ke main
 ```

@@ -427,8 +427,7 @@
       'sum.duration': 'Term', 'sum.discount': 'Long-term discount',
       'sum.deposit': 'Deposit ({n} mo, refundable)', 'sum.end': 'Contract ends', 'sum.total': 'Contract total',
       'form.disclaimer': 'Submitting marks the unit as <b>Reserved</b> on the floor plan right away. Bookings are stored locally in this browser (leasing demo) and can be cancelled any time.',
-      'p.price': 'Price', 'p.viewAr': 'View in AR', 'p.arUnsupported': 'Open this page on an Android or iOS phone to place the product in your room. On desktop you can still drag to inspect the 3D model.',
-      'p.arIos': 'On iPhone/iPad, AR needs a USDZ version of the model — not bundled in this demo.',
+      'p.price': 'Price', 'p.viewAr': 'View in AR', 'p.arUnsupported': 'Open this page on a phone or tablet (Android or iOS) to place the product in your room at real size. On desktop you can still drag to inspect the 3D model.',
       'p.visitShop': 'Visit the shop', 'p.soldBy': 'Sold by', 'p.specs': 'Details',
       'p.mvFail': '3D preview could not load \u2014 check the connection to the model-viewer CDN.',
       'p.buyNote': 'Checkout is not wired up yet — this build covers the showcase and AR preview.',
@@ -507,8 +506,7 @@
       'sum.duration': 'Durasi', 'sum.discount': 'Diskon kontrak panjang',
       'sum.deposit': 'Deposit ({n} bln, dikembalikan)', 'sum.end': 'Kontrak berakhir', 'sum.total': 'Total kontrak',
       'form.disclaimer': 'Dengan mengajukan sewa, unit langsung ditandai <b>Dipesan</b> di denah mall. Pesanan disimpan lokal di browser ini (demo leasing) dan bisa dibatalkan kapan saja.',
-      'p.price': 'Harga', 'p.viewAr': 'Lihat di AR', 'p.arUnsupported': 'Buka halaman ini di HP Android atau iOS untuk menaruh produk di ruanganmu. Di desktop kamu tetap bisa memutar model 3D-nya.',
-      'p.arIos': 'Di iPhone/iPad, AR butuh versi model USDZ — belum disertakan di demo ini.',
+      'p.price': 'Harga', 'p.viewAr': 'Lihat di AR', 'p.arUnsupported': 'Buka halaman ini di HP atau tablet (Android maupun iOS) untuk menaruh produk di ruanganmu dengan ukuran asli. Di desktop kamu tetap bisa memutar model 3D-nya.',
       'p.visitShop': 'Kunjungi Toko', 'p.soldBy': 'Dijual oleh', 'p.specs': 'Detail',
       'p.mvFail': 'Pratinjau 3D gagal dimuat \u2014 cek koneksi ke CDN model-viewer.',
       'p.buyNote': 'Checkout belum dipasang — versi ini baru sampai showcase dan pratinjau AR.',
@@ -662,7 +660,7 @@
              id:'Coupe 356B restorasi penuh, matching numbers, kondisi showroom.' },
       specs:{ en:['1.6 L flat-four', 'Restored 2023', 'Matching numbers'],
               id:['Flat-four 1,6 L', 'Restorasi 2023', 'Matching numbers'] } },
-    { id:'P-A4-2', shop:'A4', booth:1, model:'assets/Porsche%20356B.glb', price:4500000, scale:0.055, lift:0.02, show:2,
+    { id:'P-A4-2', shop:'A4', booth:1, model:'assets/products/porsche-356b-1-18.glb', price:4500000, scale:1, lift:0.02, show:2,
       name:{ en:'Porsche 356B 1:18 Scale Model', id:'Miniatur Porsche 356B 1:18' },
       desc:{ en:'Die-cast 1:18 replica with opening doors and a display base.',
              id:'Replika die-cast 1:18 dengan pintu bisa dibuka dan alas pajangan.' },
@@ -1462,8 +1460,9 @@
   }
 
   /* ------------------- panel produk: pratinjau 3D + view in AR --------------- */
-  var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // AR Quick Look (iPhone/iPad) butuh berkas .usdz — dibuat oleh tools/glb-to-usdz.py
+  // dan diletakkan bersebelahan dengan .glb-nya
+  function iosSrc(pr) { return pr.model.replace(/\.glb$/i, '.usdz'); }
 
   function openProduct(id) {
     var pr = PROD_BY_ID[id];
@@ -1481,7 +1480,8 @@
       '</div>' +
       '<div class="sheet-body">' +
         '<div class="mv-wrap">' +
-          '<model-viewer id="mv" src="' + pr.model + '" alt="' + esc(L(pr.name)) + '"' +
+          '<model-viewer id="mv" src="' + pr.model + '" ios-src="' + iosSrc(pr) + '"' +
+            ' alt="' + esc(L(pr.name)) + '"' +
             ' camera-controls auto-rotate auto-rotate-delay="800" shadow-intensity="1" exposure="1.05"' +
             ' environment-image="neutral" ar ar-modes="webxr scene-viewer quick-look" ar-scale="auto"' +
             ' touch-action="pan-y" loading="eager">' +
@@ -1514,7 +1514,7 @@
       if (done) return;
       done = true;
       if (!window.customElements || !customElements.get('model-viewer')) { note.textContent = t('p.mvFail'); return; }
-      note.innerHTML = mv.canActivateAR ? '' : t('p.arUnsupported') + (IS_IOS ? ' ' + t('p.arIos') : '');
+      note.innerHTML = mv.canActivateAR ? '' : t('p.arUnsupported');
     };
     if (window.customElements && customElements.whenDefined) {
       customElements.whenDefined('model-viewer').then(function () { setTimeout(tell, 300); });

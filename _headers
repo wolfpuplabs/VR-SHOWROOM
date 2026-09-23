@@ -1,0 +1,10 @@
+# Netlify / Cloudflare Pages: pastikan berkas AR dikirim dengan MIME type yang benar
+# supaya AR Quick Look (iOS) dan Scene Viewer (Android) mau membukanya.
+# GitHub Pages mengabaikan berkas ini (di sana .usdz dikirim sebagai octet-stream,
+# yang masih dibuka Safari berdasarkan ekstensi).
+
+/*.usdz
+  Content-Type: model/vnd.usdz+zip
+
+/*.glb
+  Content-Type: model/gltf-binary
