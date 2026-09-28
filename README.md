@@ -10,17 +10,47 @@ Dua halaman WebXR berbasis [A-Frame](https://aframe.io) yang bisa dibuka langsun
 
 ## Wolfpup Virtual Mall (`mall.html`)
 
-Mall dibangun sepenuhnya secara prosedural dari script di dalam satu file HTML — tidak ada
-proses build, hanya dua dependensi dari CDN: A-Frame (dunia 3D) dan `model-viewer`
-(pratinjau produk + AR).
+Tanpa proses build: data, UI, dan logika leasing ada di `mall.html`, sedangkan seluruh visual 3D
+dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D),
+`model-viewer` (pratinjau produk + AR), dan Google Fonts untuk signage.
 
 **Denah lantai dasar**
 
-- Koridor utama selebar 14 m dengan atrium terbuka dan air mancur di tengah
-- **Blok A** (A1–A7) dan **Blok B** (B1–B7): unit toko 80–112 m² dengan etalase kaca, pintu masuk,
-  papan nama, dan interior yang bisa dimasuki
-- **Kios K1–K4**: kios 16 m² di tengah koridor
-- Eskalator (dekoratif), papan direktori, bangku, dan tanaman koridor
+- Atrium dua lantai: koridor marmer 14 m, mezanin dengan balustrade kaca, kolom batu,
+  dan skylight berangka baja sepanjang mall
+- **Blok A** (A1–A7) dan **Blok B** (B1–B7): unit toko 80–112 m² dengan portal etalase,
+  kaca penuh, fascia menyala, dan interior yang bisa dimasuki
+- **Kios K1–K4** berkanopi di garis tengah koridor, dua pulau taman dengan bangku, air mancur
+  bertingkat, dan eskalator ke jembatan lantai 2 (lantai 2 sendiri belum dibuka)
+- Plaza masuk dengan **kantor leasing** dan **direktori digital** (keduanya bisa diklik)
+
+**Visual & rendering (`mall-world.js`)**
+
+- **Pencahayaan**: lampu fisik + tone mapping ACES, image-based lighting dari environment map
+  yang dirender saat mulai (refleksi nyata di marmer, kaca, dan logam), matahari lewat
+  skylight dengan light shaft, lampu koridor hangat, dan cove LED di bawah mezanin
+- **Material PBR prosedural**: marmer berurat dengan nat, granit, kayu oak, terrazzo, beton
+  poles, plester, dan logam brushed — lengkap dengan roughness map dan normal map yang
+  dibuat di kanvas saat loading. Tidak ada berkas tekstur yang diunduh
+- **Shader kustom**: langit gradasi dengan matahari, air mancur beriak (dua normal map yang
+  bergeser), light shaft additive, dan reticle lantai
+- **Etalase**: fascia menyala dengan identitas tiap tenant (huruf, warna, lantai, dinding fitur),
+  lis LED status, dan **hoarding leasing** di kaca unit kosong (FOR LEASE, luas, harga, CTA).
+  Interior tenant berisi rak berstok, etalase kaca produk, dan meja kasir; unit kosong tampil
+  sebagai shell beton dengan lampu kerja dan decal luas di lantai
+- **Signage kanvas** untuk semua teks 3D (tajam, ikut ganti bahasa, tidak butuh font CDN A-Frame)
+- **Hidup**: tetesan air mancur, anak tangga eskalator bergerak, spanduk bergoyang, produk berputar,
+  pin hotspot melayang
+- **Performa**: semua geometri statis digabung per material (±60–220 draw call tergantung
+  sudut pandang), bayangan kontak murah di bawah objek, dan tiga tier kualitas:
+
+  | Tier | Dipakai otomatis untuk | Beda utama |
+  | --- | --- | --- |
+  | Low | perangkat memori kecil | pixel ratio 1, tanpa light shaft & semburan air |
+  | Medium | tablet & HP | pixel ratio ≤ 1,5, tanpa shadow map real-time |
+  | High | desktop | pixel ratio ≤ 2, bayangan matahari real-time, tekstur lantai 2K |
+
+  Tier bisa dipaksa dari panel bantuan (**?** → Graphics); halaman dimuat ulang untuk menerapkannya.
 
 **Product showcase + AR**
 
@@ -70,14 +100,15 @@ proses build, hanya dua dependensi dari CDN: A-Frame (dunia 3D) dan `model-viewe
 
 | Aksi | Desktop | Mobile / VR |
 | --- | --- | --- |
-| Jalan | `W` `A` `S` `D` / tombol panah | joystick kiri bawah |
+| Jalan | **klik lantai** (reticle) · `W` `A` `S` `D` / panah | **ketuk lantai** · joystick kiri bawah |
 | Lihat sekeliling | drag mouse | geser layar / gerakkan kepala |
-| Interaksi (unit &amp; produk) | klik crosshair atau `E` | ketuk / gaze |
+| Interaksi (unit &amp; produk) | klik etalase / pin, atau `E` saat hover | ketuk / gaze (VR) |
 | Peta &amp; daftar space | `M` dan `L` | tombol di header |
 | Tutup panel | `Esc` | tombol tutup |
 
-Panel denah bisa diklik untuk berpindah lokasi, dan tombol **Kunjungi / Visit** pada daftar
-space akan membawa kamera tepat ke depan unit yang dipilih. Sidebar punya dua tab:
+Reticle di lantai berwarna putih kalau titiknya bisa dicapai lurus, abu-abu kalau terhalang.
+Tujuan dekat ditempuh dengan berjalan mulus; tujuan jauh (tombol **Kunjungi / Visit**, klik
+denah) memakai fade singkat lalu kamera langsung menghadap unitnya. Sidebar punya dua tab:
 **Spaces for rent** (unit yang disewakan) dan **Products** (katalog produk seluruh tenant).
 
 ## Menjalankan secara lokal
@@ -127,7 +158,8 @@ Pengecualian dan penyetelan (lihat blok `env` di file workflow):
 
 ```
 index.html                     showroom VR Porsche
-mall.html                      mall + leasing + product showcase (satu file)
+mall.html                      data, UI, leasing, product showcase, navigasi
+mall-world.js                  renderer 3D: material, pencahayaan, arsitektur, toko, FX
 assets/Porsche 356B.glb        model showroom (dipakai juga oleh unit A4)
 assets/products/*.glb          model produk tenant (web + AR Android)
 assets/products/*.usdz         versi AR Quick Look untuk iPhone/iPad
