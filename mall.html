@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="description" content="Virtual mall 3D yang bisa dijelajahi dengan space / unit ritel yang bisa disewa secara online.">
 <title>Wolfpup Virtual Mall — Sewa Space Ritel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="mall-world.js"></script>
 <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 <style>
   :root{
@@ -108,14 +112,34 @@
     display:flex;justify-content:space-between;gap:10px;margin-bottom:6px}
   #minimap{display:block;border-radius:8px;background:rgba(0,0,0,.35)}
 
-  /* ---------- gaze hint ---------- */
-  #hint{position:absolute;z-index:4;left:50%;top:calc(50% + 42px);transform:translateX(-50%);
+  /* ---------- hover hint (mengikuti pointer) ---------- */
+  #hint{position:absolute;z-index:4;left:50%;top:calc(50% + 42px);transform:translate(-50%,0);
     background:rgba(8,10,15,.86);border:1px solid var(--stroke);border-radius:10px;padding:7px 12px;
     font-size:12.5px;white-space:nowrap;opacity:0;transition:opacity .15s;backdrop-filter:blur(8px)}
   #hint.show{opacity:1}
   #hint b{color:var(--brand)}
   kbd{background:rgba(255,255,255,.12);border:1px solid var(--stroke-strong);border-bottom-width:2px;
     border-radius:5px;padding:1px 5px;font-size:10.5px;font-family:ui-monospace,Menlo,Consolas,monospace}
+
+  a-scene canvas.a-canvas{cursor:grab}
+  a-scene canvas.a-canvas.is-pointer{cursor:pointer}
+  a-scene canvas.a-canvas.is-walk{cursor:crosshair}
+
+  /* ---------- loader & fade ---------- */
+  #loader{position:absolute;inset:0;z-index:70;display:grid;place-items:center;
+    background:radial-gradient(900px 500px at 50% 10%,rgba(255,176,32,.10),transparent 60%),#0b0d12;transition:opacity .5s ease}
+  #loader.done{opacity:0;pointer-events:none}
+  #loader .box{width:min(360px,80vw);text-align:center}
+  #loader .mark{width:52px;height:52px;border-radius:14px;margin:0 auto 16px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#241500;font-weight:800;font-size:22px}
+  #loader h2{margin:0 0 4px;font-size:17px}
+  #loader p{margin:0 0 16px;color:var(--muted);font-size:12.5px;min-height:1.2em}
+  #loader .bar{height:4px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
+  #loader .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--brand-2));transition:width .3s ease}
+  #fade{position:absolute;inset:0;z-index:45;background:#07090d;opacity:0;pointer-events:none;transition:opacity .22s ease}
+  #fade.on{opacity:1}
+  .quality{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--muted)}
+  .quality .seg button{padding:6px 10px}
 
   /* ---------- modal ---------- */
   #modal,#pmodal{position:absolute;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;
@@ -281,6 +305,7 @@
   </div>
 
   <div id="hint"></div>
+  <div id="fade"></div>
   <div id="joy" class="pe"><div class="knob"></div></div>
   <div id="toasts"></div>
 
@@ -292,6 +317,16 @@
   <!-- product showcase + AR -->
   <div id="pmodal" class="pe" role="dialog" aria-modal="true">
     <div class="sheet" id="psheet"></div>
+  </div>
+
+  <!-- loader: progres pembangunan dunia 3D -->
+  <div id="loader" class="pe">
+    <div class="box">
+      <div class="mark">W</div>
+      <h2>Wolfpup Virtual Mall</h2>
+      <p id="loader-label">Loading…</p>
+      <div class="bar"><i id="loader-bar"></i></div>
+    </div>
   </div>
 
   <!-- welcome / controls -->
@@ -310,6 +345,16 @@
           <span><i style="background:#5aa9ff"></i><span data-i18n="legend.booked">Reserved by you</span></span>
           <span><i style="background:#ff5d7a"></i><span data-i18n="legend.rented">Leased</span></span>
         </div>
+        <div class="quality">
+          <span data-i18n="q.label">Graphics</span>
+          <div class="seg" id="qseg">
+            <button data-q="auto" aria-pressed="true" data-i18n="q.auto">Auto</button>
+            <button data-q="low" aria-pressed="false" data-i18n="q.low">Low</button>
+            <button data-q="medium" aria-pressed="false" data-i18n="q.medium">Medium</button>
+            <button data-q="high" aria-pressed="false" data-i18n="q.high">High</button>
+          </div>
+          <span id="q-active"></span>
+        </div>
       </div>
       <div class="sheet-foot">
         <button class="btn primary" id="btn-enter" data-i18n="btn.enter">Enter the mall</button>
@@ -319,35 +364,34 @@
 </div>
 
 <!-- ======================= 3D SCENE ======================= -->
-<a-scene id="scene" shadow="type: pcfsoft" renderer="colorManagement: true; antialias: true; physicallyCorrectLights: true"
-         vr-mode-ui="enabled: true" loading-screen="dotsColor: #ffb020; backgroundColor: #0b0d12">
+<!-- Lampu, langit, dan seluruh bangunan dibuat oleh mall-world.js. Kursor mengikuti
+     mouse/sentuhan (bukan gaze) supaya bisa hover, klik, dan tap-to-move; di mode VR
+     kursor gaze di dalam kamera yang dipakai. -->
+<a-scene id="scene"
+         renderer="colorManagement: true; antialias: true; physicallyCorrectLights: true; toneMapping: ACESFilmic; exposure: 1; maxCanvasWidth: 2560; maxCanvasHeight: 1600"
+         cursor="rayOrigin: mouse; fuse: false"
+         raycaster="objects: .clickable, .floor-hit; interval: 40; far: 60"
+         vr-mode-ui="enabled: true" loading-screen="enabled: false">
 
   <a-assets timeout="20000">
     <a-asset-item id="porsche-model" src="assets/Porsche%20356B.glb"></a-asset-item>
   </a-assets>
 
-  <a-sky color="#9fb7d4"></a-sky>
-  <a-entity light="type: hemisphere; color: #dfeaff; groundColor: #6b6257; intensity: 0.85"></a-entity>
-  <a-entity light="type: ambient; color: #ffffff; intensity: 0.45"></a-entity>
-  <a-entity light="type: directional; color: #fff4e0; intensity: 0.75; castShadow: false"
-            position="14 26 12"></a-entity>
-
   <!-- pemain -->
   <a-entity id="rig">
-    <a-camera id="cam" position="0 1.6 28" wasd-controls="acceleration: 45; fly: false"
-              look-controls="pointerLockEnabled: false; magicWindowTrackingEnabled: true"
+    <a-camera id="cam" position="0 1.6 30.6" wasd-controls="acceleration: 45; fly: false"
+              look-controls="pointerLockEnabled: false; magicWindowTrackingEnabled: false; reverseMouseDrag: false"
               mall-controls>
-      <a-cursor color="#ffb020" raycaster="objects: .clickable; far: 26"
-                fuse="false" scale="0.7 0.7 0.7"
-                animation__click="property: scale; startEvents: click; from: 0.25 0.25 0.25; to: 0.7 0.7 0.7; dur: 180">
-      </a-cursor>
+      <a-entity id="vr-cursor" visible="false"
+                cursor="fuse: true; fuseTimeout: 1200"
+                raycaster="objects: .clickable; far: 30; enabled: false"
+                position="0 0 -1"
+                geometry="primitive: ring; radiusInner: 0.012; radiusOuter: 0.018"
+                material="color: #ffb020; shader: flat"></a-entity>
     </a-camera>
   </a-entity>
 
-  <!-- struktur mall dibangun oleh script -->
-  <a-entity id="mall-structure"></a-entity>
   <a-entity id="mall-units"></a-entity>
-  <a-entity id="mall-props"></a-entity>
 </a-scene>
 
 <script>
@@ -359,7 +403,7 @@
   'use strict';
 
   /* ------------------------------ konfigurasi ------------------------------ */
-  var MALL      = { minX: -20, maxX: 20, minZ: -36, maxZ: 32 };
+  var MALL      = { minX: -21.5, maxX: 21.5, minZ: -36, maxZ: 32 };   // cukup untuk unit terdalam (14 m)
   var FRONT_L   = -7, FRONT_R = 7;          // garis etalase kiri & kanan (lebar koridor 14 m)
   var DOOR_W    = 3.4;                      // lebar pintu masuk unit
   var WALL_H    = 5;                        // tinggi partisi unit
@@ -369,6 +413,7 @@
   var LS_KEY    = 'wolfpup-mall-bookings-v1';
   var LS_WAIT   = 'wolfpup-mall-waitlist-v1';
   var LS_LANG   = 'wolfpup-mall-lang-v1';
+  var LS_QUALITY = 'wolfpup-mall-quality-v1';
 
   var STATUS = {
     available: { color: '#36d399' },
@@ -393,11 +438,11 @@
       'map.title': 'Floor plan',
       'welcome.title': 'Welcome to Wolfpup Virtual Mall',
       'welcome.sub': 'A 3D mall you can walk through — every empty unit is ready to rent, and every product can be viewed in AR.',
-      'welcome.1': '<b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b> or the arrow keys to walk',
-      'welcome.2': '<b>Drag the mouse</b> (or swipe on a phone) to look around',
-      'welcome.3': 'Point the crosshair at a shop front and <b>click</b> — or press <kbd>E</kbd> — for details and to rent it',
-      'welcome.4': 'Walk inside a shop and click a product to open its 3D preview and <b>View in AR</b>',
-      'welcome.5': 'On a phone: use the <b>joystick</b> at the bottom left to walk',
+      'welcome.1': '<b>Click or tap the floor</b> to walk there — or use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrow keys',
+      'welcome.2': '<b>Drag</b> to look around',
+      'welcome.3': '<b>Click a shop front</b> (or press <kbd>E</kbd> while hovering) for details and to rent it',
+      'welcome.4': 'Floating <b>AR</b> pins mark products — click one for the 3D preview and <b>View in AR</b>',
+      'welcome.5': 'On a phone you can also use the <b>joystick</b> at the bottom left',
       'welcome.6': '<kbd>M</kbd> map · <kbd>L</kbd> directory · <kbd>Esc</kbd> close panel',
       'legend.available': 'Available', 'legend.booked': 'Reserved by you', 'legend.rented': 'Leased',
       'status.available': 'Available', 'status.booked': 'Reserved', 'status.rented': 'Leased',
@@ -427,8 +472,7 @@
       'sum.duration': 'Term', 'sum.discount': 'Long-term discount',
       'sum.deposit': 'Deposit ({n} mo, refundable)', 'sum.end': 'Contract ends', 'sum.total': 'Contract total',
       'form.disclaimer': 'Submitting marks the unit as <b>Reserved</b> on the floor plan right away. Bookings are stored locally in this browser (leasing demo) and can be cancelled any time.',
-      'p.price': 'Price', 'p.viewAr': 'View in AR', 'p.arUnsupported': 'Open this page on an Android or iOS phone to place the product in your room. On desktop you can still drag to inspect the 3D model.',
-      'p.arIos': 'On iPhone/iPad, AR needs a USDZ version of the model — not bundled in this demo.',
+      'p.price': 'Price', 'p.viewAr': 'View in AR', 'p.arUnsupported': 'Open this page on a phone or tablet (Android or iOS) to place the product in your room at real size. On desktop you can still drag to inspect the 3D model.',
       'p.visitShop': 'Visit the shop', 'p.soldBy': 'Sold by', 'p.specs': 'Details',
       'p.mvFail': '3D preview could not load \u2014 check the connection to the model-viewer CDN.',
       'p.buyNote': 'Checkout is not wired up yet — this build covers the showcase and AR preview.',
@@ -437,6 +481,13 @@
       'hint.rented': 'Leased to {tenant} — click for details',
       'hint.product': '{name} · {price} — click for 3D & AR',
       'hint.showroom': 'Open the Porsche showroom (other page)',
+      'hint.directory': '<b>Directory</b> — click to browse every space',
+      'hint.leasing': '<b>Leasing office</b> — click to see available spaces',
+      'load.lighting': 'Setting up lighting…', 'load.materials': 'Baking materials…',
+      'load.architecture': 'Raising the atrium…', 'load.stores': 'Fitting out the stores…',
+      'load.details': 'Adding the finishing touches…', 'load.finish': 'Almost there…', 'load.ready': 'Ready',
+      'q.label': 'Graphics', 'q.auto': 'Auto', 'q.low': 'Low', 'q.medium': 'Medium', 'q.high': 'High',
+      'q.active': 'running: {q}',
       'toast.teleport': 'Moved to the front of <b>{name}</b>',
       'toast.moved': 'Moved to {x}, {z}',
       'toast.booked': 'Rental request for <b>{name}</b> saved. Total {total} for {months} months.',
@@ -449,16 +500,18 @@
       'toast.storage': 'This browser blocked local storage.',
       'confirm.cancel': 'Cancel the booking for {name}?',
       'confirm.reset': 'Delete every booking stored in this browser?',
-      'w3.entranceSub': 'MAIN ENTRANCE  •  GROUND FLOOR',
-      'w3.floor2': 'LEVEL 2  •  COMING SOON',
-      'w3.dirTitle': 'DIRECTORY\nGROUND FLOOR',
-      'w3.dirBody': 'BLOCK A  :  A1 - A7\nBLOCK B  :  B1 - B7\nKIOSKS   :  K1 - K4\n\nLeasing: click a shop\nfront to rent it',
-      'w3.forRent': 'FOR RENT', 'w3.reserved': 'RESERVED', 'w3.tenant': 'TENANT',
-      'w3.perMonth': '/ MONTH', 'w3.clickToRent': 'CLICK TO RENT',
-      'w3.yourBooking': 'YOUR BOOKING', 'w3.months': 'MONTHS', 'w3.awaiting': 'AWAITING VERIFICATION',
-      'w3.availableSub': 'AVAILABLE', 'w3.reservedSub': 'RESERVED',
-      'w3.readyToUse': 'READY-TO-FIT SPACE', 'w3.openingSoon': 'OPENING SOON',
-      'w3.openShowroom': 'OPEN VR SHOWROOM', 'w3.viewAr': 'VIEW IN AR'
+      'w3.floor2': 'LEVEL 2  •  NOW LEASING',
+      'w3.forLease': 'FOR LEASE', 'w3.reserved': 'RESERVED', 'w3.space': 'Retail space', 'w3.comingSoon': 'Coming soon',
+      'w3.tenant': 'Tenant', 'w3.term': 'Term', 'w3.status': 'Status', 'w3.months': 'months',
+      'w3.size': 'Size', 'w3.rent': 'Rent', 'w3.bestFor': 'Best for', 'w3.perMonth': '/ MONTH',
+      'w3.tapToRent': 'Tap the glass to rent', 'w3.tapDetails': 'Tap for booking details',
+      'w3.readyFitOut': 'Ready to fit out', 'w3.openingSoon': 'Opening soon', 'w3.cashier': 'Cashier',
+      'w3.openShowroom': 'OPEN VR SHOWROOM', 'w3.blockA': 'BLOCK A', 'w3.blockB': 'BLOCK B',
+      'w3.escalator': 'LEVEL 2 · ESCALATOR', 'w3.exit': 'EXIT', 'w3.spacesAvail': 'spaces available', 'w3.from': 'from',
+      'w3.directory': 'DIRECTORY', 'w3.groundFloor': 'Ground floor', 'w3.youAreHere': 'You are here',
+      'w3.legendAvail': 'Available', 'w3.legendRes': 'Reserved', 'w3.legendLeased': 'Leased',
+      'w3.tapBrowse': 'Tap to browse all spaces', 'w3.leasingOffice': 'LEASING OFFICE',
+      'w3.leasingCta': 'Rent a space today — tap here', 'w3.l2Soon': 'LEVEL 2 · LEASING SOON'
     },
     id: {
       'brand.sub': 'Lantai Dasar · Leasing Center',
@@ -473,11 +526,11 @@
       'map.title': 'Denah',
       'welcome.title': 'Selamat datang di Wolfpup Virtual Mall',
       'welcome.sub': 'Mall 3D yang bisa kamu jelajahi sendiri — unit kosong bisa langsung disewa, dan tiap produk bisa dilihat dengan AR.',
-      'welcome.1': '<b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b> atau tombol panah untuk berjalan',
-      'welcome.2': '<b>Drag mouse</b> (atau geser layar) untuk melihat sekeliling',
-      'welcome.3': 'Arahkan crosshair ke etalase lalu <b>klik</b> — atau tekan <kbd>E</kbd> — untuk detail &amp; menyewa',
-      'welcome.4': 'Masuk ke dalam toko lalu klik produk untuk pratinjau 3D dan <b>Lihat di AR</b>',
-      'welcome.5': 'Di HP: gunakan <b>joystick</b> di kiri bawah untuk berjalan',
+      'welcome.1': '<b>Klik atau ketuk lantai</b> untuk berjalan ke sana — atau pakai <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / tombol panah',
+      'welcome.2': '<b>Drag</b> untuk melihat sekeliling',
+      'welcome.3': '<b>Klik etalase toko</b> (atau tekan <kbd>E</kbd> saat hover) untuk detail &amp; menyewa',
+      'welcome.4': 'Pin <b>AR</b> melayang menandai produk — klik untuk pratinjau 3D dan <b>Lihat di AR</b>',
+      'welcome.5': 'Di HP kamu juga bisa memakai <b>joystick</b> di kiri bawah',
       'welcome.6': '<kbd>M</kbd> peta · <kbd>L</kbd> daftar space · <kbd>Esc</kbd> tutup panel',
       'legend.available': 'Tersedia', 'legend.booked': 'Dipesan (pesananmu)', 'legend.rented': 'Sudah disewa',
       'status.available': 'Tersedia', 'status.booked': 'Dipesan', 'status.rented': 'Disewa',
@@ -507,8 +560,7 @@
       'sum.duration': 'Durasi', 'sum.discount': 'Diskon kontrak panjang',
       'sum.deposit': 'Deposit ({n} bln, dikembalikan)', 'sum.end': 'Kontrak berakhir', 'sum.total': 'Total kontrak',
       'form.disclaimer': 'Dengan mengajukan sewa, unit langsung ditandai <b>Dipesan</b> di denah mall. Pesanan disimpan lokal di browser ini (demo leasing) dan bisa dibatalkan kapan saja.',
-      'p.price': 'Harga', 'p.viewAr': 'Lihat di AR', 'p.arUnsupported': 'Buka halaman ini di HP Android atau iOS untuk menaruh produk di ruanganmu. Di desktop kamu tetap bisa memutar model 3D-nya.',
-      'p.arIos': 'Di iPhone/iPad, AR butuh versi model USDZ — belum disertakan di demo ini.',
+      'p.price': 'Harga', 'p.viewAr': 'Lihat di AR', 'p.arUnsupported': 'Buka halaman ini di HP atau tablet (Android maupun iOS) untuk menaruh produk di ruanganmu dengan ukuran asli. Di desktop kamu tetap bisa memutar model 3D-nya.',
       'p.visitShop': 'Kunjungi Toko', 'p.soldBy': 'Dijual oleh', 'p.specs': 'Detail',
       'p.mvFail': 'Pratinjau 3D gagal dimuat \u2014 cek koneksi ke CDN model-viewer.',
       'p.buyNote': 'Checkout belum dipasang — versi ini baru sampai showcase dan pratinjau AR.',
@@ -517,6 +569,13 @@
       'hint.rented': 'Disewa {tenant} — klik untuk detail',
       'hint.product': '{name} · {price} — klik untuk 3D & AR',
       'hint.showroom': 'Buka showroom Porsche (halaman lain)',
+      'hint.directory': '<b>Direktori</b> — klik untuk melihat semua space',
+      'hint.leasing': '<b>Kantor leasing</b> — klik untuk melihat space yang tersedia',
+      'load.lighting': 'Menyiapkan pencahayaan…', 'load.materials': 'Membuat material…',
+      'load.architecture': 'Membangun atrium…', 'load.stores': 'Menata toko…',
+      'load.details': 'Menambahkan detail…', 'load.finish': 'Hampir selesai…', 'load.ready': 'Siap',
+      'q.label': 'Grafis', 'q.auto': 'Otomatis', 'q.low': 'Rendah', 'q.medium': 'Sedang', 'q.high': 'Tinggi',
+      'q.active': 'berjalan: {q}',
       'toast.teleport': 'Kamu dipindahkan ke depan <b>{name}</b>',
       'toast.moved': 'Berpindah ke titik {x}, {z}',
       'toast.booked': 'Pengajuan sewa <b>{name}</b> tersimpan. Total {total} untuk {months} bulan.',
@@ -529,16 +588,18 @@
       'toast.storage': 'Browser memblokir penyimpanan lokal.',
       'confirm.cancel': 'Batalkan pesanan untuk {name}?',
       'confirm.reset': 'Hapus semua pesanan sewa yang tersimpan di browser ini?',
-      'w3.entranceSub': 'PINTU MASUK UTAMA  •  LANTAI DASAR',
-      'w3.floor2': 'LANTAI 2  •  SEGERA HADIR',
-      'w3.dirTitle': 'DIREKTORI\nLANTAI DASAR',
-      'w3.dirBody': 'BLOK A  :  A1 - A7\nBLOK B  :  B1 - B7\nKIOS    :  K1 - K4\n\nLeasing: klik etalase\nuntuk menyewa',
-      'w3.forRent': 'DISEWAKAN', 'w3.reserved': 'DIPESAN', 'w3.tenant': 'TENANT',
-      'w3.perMonth': '/ BULAN', 'w3.clickToRent': 'KLIK UNTUK SEWA',
-      'w3.yourBooking': 'PESANAN ANDA', 'w3.months': 'BULAN', 'w3.awaiting': 'MENUNGGU VERIFIKASI',
-      'w3.availableSub': 'TERSEDIA', 'w3.reservedSub': 'DIPESAN',
-      'w3.readyToUse': 'AREA SIAP PAKAI', 'w3.openingSoon': 'SEGERA DIBUKA',
-      'w3.openShowroom': 'BUKA SHOWROOM VR', 'w3.viewAr': 'LIHAT DI AR'
+      'w3.floor2': 'LANTAI 2  •  SEDANG DISEWAKAN',
+      'w3.forLease': 'DISEWAKAN', 'w3.reserved': 'DIPESAN', 'w3.space': 'Space ritel', 'w3.comingSoon': 'Segera hadir',
+      'w3.tenant': 'Penyewa', 'w3.term': 'Durasi', 'w3.status': 'Status', 'w3.months': 'bulan',
+      'w3.size': 'Luas', 'w3.rent': 'Sewa', 'w3.bestFor': 'Cocok untuk', 'w3.perMonth': '/ BULAN',
+      'w3.tapToRent': 'Ketuk kaca untuk menyewa', 'w3.tapDetails': 'Ketuk untuk detail pesanan',
+      'w3.readyFitOut': 'Siap renovasi', 'w3.openingSoon': 'Segera dibuka', 'w3.cashier': 'Kasir',
+      'w3.openShowroom': 'BUKA SHOWROOM VR', 'w3.blockA': 'BLOK A', 'w3.blockB': 'BLOK B',
+      'w3.escalator': 'LANTAI 2 · ESKALATOR', 'w3.exit': 'KELUAR', 'w3.spacesAvail': 'space tersedia', 'w3.from': 'mulai',
+      'w3.directory': 'DIREKTORI', 'w3.groundFloor': 'Lantai dasar', 'w3.youAreHere': 'Anda di sini',
+      'w3.legendAvail': 'Tersedia', 'w3.legendRes': 'Dipesan', 'w3.legendLeased': 'Disewa',
+      'w3.tapBrowse': 'Ketuk untuk lihat semua space', 'w3.leasingOffice': 'KANTOR LEASING',
+      'w3.leasingCta': 'Sewa space hari ini — ketuk di sini', 'w3.l2Soon': 'LANTAI 2 · SEGERA DISEWAKAN'
     }
   };
 
@@ -608,15 +669,16 @@
   var KIOSK_DEFS = [
     { code:'K1', z: 20,  size:4, cat:C.drinks,  status:'rented',    tenant:'Juice Bar Segar',
       tagline:{ en:'Juice & smoothies', id:'Jus & smoothie' } },
-    { code:'K2', z: 9,   size:4, cat:C.acc,     status:'available', tenant:null,
+    { code:'K2', z: 7,   size:4, cat:C.acc,     status:'available', tenant:null,
       tagline:{ en:'Kiosk in the main corridor', id:'Kios di koridor utama' } },
-    { code:'K3', z: -8,  size:4, cat:C.service, status:'available', tenant:null,
+    { code:'K3', z: -7,  size:4, cat:C.service, status:'available', tenant:null,
       tagline:{ en:'Great for a service counter', id:'Cocok untuk counter jasa' } },
-    { code:'K4', z: -25, size:4, cat:C.coffee,  status:'available', tenant:null,
+    { code:'K4', z: -19, size:4, cat:C.coffee,  status:'available', tenant:null,
       tagline:{ en:'Close to the escalator', id:'Dekat area eskalator' } }
   ];
 
   var RATES = { prime: 320000, standard: 260000, deep: 210000, kiosk: 520000 };
+  var ISLANDS = [14, -13];                   // pulau taman + bangku di garis tengah koridor
 
   var FACILITIES_UNIT = {
     en: ['Central AC', '5,500 VA power', 'Water supply', 'Grease trap (F&B)', '24h CCTV', 'Tenant Wi-Fi', 'Signage board', 'Loading access'],
@@ -662,7 +724,7 @@
              id:'Coupe 356B restorasi penuh, matching numbers, kondisi showroom.' },
       specs:{ en:['1.6 L flat-four', 'Restored 2023', 'Matching numbers'],
               id:['Flat-four 1,6 L', 'Restorasi 2023', 'Matching numbers'] } },
-    { id:'P-A4-2', shop:'A4', booth:1, model:'assets/Porsche%20356B.glb', price:4500000, scale:0.055, lift:0.02, show:2,
+    { id:'P-A4-2', shop:'A4', booth:1, model:'assets/products/porsche-356b-1-18.glb', price:4500000, scale:1, lift:0.02, show:2,
       name:{ en:'Porsche 356B 1:18 Scale Model', id:'Miniatur Porsche 356B 1:18' },
       desc:{ en:'Die-cast 1:18 replica with opening doors and a display base.',
              id:'Replika die-cast 1:18 dengan pintu bisa dibuka dan alas pajangan.' },
@@ -715,7 +777,6 @@
   var PRODUCTS = [];              // produk siap pakai (dengan referensi unit)
   var PROD_BY_ID = {};
   var COLLIDERS = [];             // {x1,z1,x2,z2}
-  var I18N_3D = [];               // { el, attr, key } teks 3D yang ikut ganti bahasa
   var bookings = loadJSON(LS_KEY, {});
   var waitlist = loadJSON(LS_WAIT, {});
   var activeFilter = 'all';
@@ -802,137 +863,6 @@
     return bookings[u.id] ? 'booked' : 'available';
   }
 
-  /* ------------------------------- helper 3D -------------------------------- */
-  function make(tag, attrs, parent) {
-    var e = document.createElement(tag);
-    for (var k in attrs) if (attrs[k] !== null && attrs[k] !== undefined) e.setAttribute(k, attrs[k]);
-    if (parent) parent.appendChild(e);
-    return e;
-  }
-  // box(parent, x, y, z, w, h, d, color, opts)
-  function box(parent, x, y, z, w, h, d, color, opts) {
-    opts = opts || {};
-    var attrs = {
-      position: x + ' ' + y + ' ' + z,
-      width: w, height: h, depth: d, color: color,
-      shadow: 'cast: ' + (opts.cast === true) + '; receive: ' + (opts.receive !== false)
-    };
-    if (opts.opacity !== undefined) { attrs.opacity = opts.opacity; attrs.transparent = 'true'; }
-    if (opts.metalness !== undefined) attrs.metalness = opts.metalness;
-    if (opts.roughness !== undefined) attrs.roughness = opts.roughness;
-    if (opts.cls) attrs['class'] = opts.cls;
-    var e = make('a-box', attrs, parent);
-    if (opts.collide && (y - h / 2) < 2.2) {
-      var o = opts.origin || [0, 0];   // box bisa berada di dalam entity anak
-      COLLIDERS.push({
-        x1: o[0] + x - w / 2, x2: o[0] + x + w / 2,
-        z1: o[1] + z - d / 2, z2: o[1] + z + d / 2
-      });
-    }
-    return e;
-  }
-  // teks 3D yang nilainya mengikuti kunci bahasa
-  function i18nText(el, key) { I18N_3D.push({ el: el, key: key }); el.setAttribute('value', t(key)); return el; }
-  function text(parent, value, x, y, z, rotY, opts) {
-    opts = opts || {};
-    return make('a-text', {
-      value: value, position: x + ' ' + y + ' ' + z, rotation: '0 ' + rotY + ' 0',
-      align: opts.align || 'center', color: opts.color || '#ffffff',
-      width: opts.width || 6, 'baseline': opts.baseline || 'center',
-      'wrap-count': opts.wrap || 28
-    }, parent);
-  }
-
-  /* --------------------------- struktur bangunan ---------------------------- */
-  function buildStructure() {
-    var root = document.getElementById('mall-structure');
-    var cx = (MALL.minX + MALL.maxX) / 2, cz = (MALL.minZ + MALL.maxZ) / 2;
-    var W = MALL.maxX - MALL.minX, D = MALL.maxZ - MALL.minZ;
-
-    // lantai utama + runner koridor
-    make('a-plane', {
-      position: cx + ' 0 ' + cz, rotation: '-90 0 0', width: W, height: D,
-      color: '#d8d2c6', roughness: 0.9, shadow: 'receive: true'
-    }, root);
-    make('a-plane', {
-      position: '0 0.02 ' + cz, rotation: '-90 0 0', width: 13.6, height: D,
-      color: '#efe9dd', roughness: 0.75
-    }, root);
-    // garis pola koridor
-    for (var z = MALL.minZ + 4; z < MALL.maxZ; z += 6) {
-      make('a-plane', { position: '0 0.03 ' + z, rotation: '-90 0 0', width: 13.6, height: 0.35, color: '#c9b892' }, root);
-    }
-    // apron di depan tiap etalase
-    make('a-plane', { position: (FRONT_L + 1.1) + ' 0.03 ' + cz, rotation: '-90 0 0', width: 2.2, height: D, color: '#b9b0a0' }, root);
-    make('a-plane', { position: (FRONT_R - 1.1) + ' 0.03 ' + cz, rotation: '-90 0 0', width: 2.2, height: D, color: '#b9b0a0' }, root);
-
-    // dinding luar
-    var wallColor = '#e7e2d8';
-    box(root, MALL.minX - 0.25, 3, cz, 0.5, 6, D, wallColor, { collide: true });          // barat
-    box(root, MALL.maxX + 0.25, 3, cz, 0.5, 6, D, wallColor, { collide: true });          // timur
-    box(root, cx, 3, MALL.minZ - 0.25, W + 1, 6, 0.5, wallColor, { collide: true });      // utara
-    // selatan (dengan bukaan pintu masuk selebar 12 m)
-    box(root, -13, 3, MALL.maxZ + 0.25, 14, 6, 0.5, wallColor, { collide: true });
-    box(root,  13, 3, MALL.maxZ + 0.25, 14, 6, 0.5, wallColor, { collide: true });
-    box(root,   0, 5.2, MALL.maxZ + 0.25, 12, 1.6, 0.5, '#2c3140', { collide: false });
-    text(root, 'WOLFPUP VIRTUAL MALL', 0, 5.2, MALL.maxZ - 0.1, 180, { width: 16, color: '#ffb020' });
-    i18nText(text(root, '', 0, 4.5, MALL.maxZ - 0.1, 180, { width: 10, color: '#cbd3e2' }), 'w3.entranceSub');
-
-    // plafon di atas deretan toko + balok melintang koridor (atrium terbuka)
-    make('a-plane', { position: ((MALL.minX + FRONT_L) / 2) + ' ' + CEIL_Y + ' ' + cz, rotation: '90 0 0', width: (FRONT_L - MALL.minX), height: D, color: '#f2efe8' }, root);
-    make('a-plane', { position: ((MALL.maxX + FRONT_R) / 2) + ' ' + CEIL_Y + ' ' + cz, rotation: '90 0 0', width: (MALL.maxX - FRONT_R), height: D, color: '#f2efe8' }, root);
-    for (var bz = MALL.minZ + 3; bz < MALL.maxZ; bz += 6) {
-      box(root, 0, CEIL_Y - 0.2, bz, 14.2, 0.4, 0.55, '#dcd6ca', { cast: false });
-    }
-    // strip lampu plafon
-    for (var lz = MALL.minZ + 5; lz < MALL.maxZ; lz += 8) {
-      make('a-box', { position: (FRONT_L - 4) + ' ' + (CEIL_Y - 0.12) + ' ' + lz, width: 8, height: 0.08, depth: 0.5, color: '#fff6df', emissive: '#fff3d0', 'emissive-intensity': 0.9 }, root);
-      make('a-box', { position: (FRONT_R + 4) + ' ' + (CEIL_Y - 0.12) + ' ' + lz, width: 8, height: 0.08, depth: 0.5, color: '#fff6df', emissive: '#fff3d0', 'emissive-intensity': 0.9 }, root);
-    }
-    // pencahayaan koridor
-    [20, 4, -12, -28].forEach(function (pz) {
-      make('a-entity', { light: 'type: point; intensity: 0.42; distance: 26; color: #ffeccd', position: '0 5 ' + pz }, root);
-    });
-
-    // eskalator & area lantai 2 (dekoratif) di ujung utara
-    var esc = make('a-entity', { position: '0 0 ' + (MALL.minZ + 6) }, root);
-    for (var s = 0; s < 10; s++) {
-      box(esc, -2.2, 0.25 + s * 0.28, -s * 0.55, 3.4, 0.5 + s * 0.56, 0.55, s % 2 ? '#a9b0be' : '#98a0ae', {});
-      box(esc,  2.2, 0.25 + s * 0.28, -s * 0.55, 3.4, 0.5 + s * 0.56, 0.55, s % 2 ? '#a9b0be' : '#98a0ae', {});
-    }
-    box(esc, 0, 4.4, -2.6, 13, 0.3, 6, '#cfd5df', { cast: false });
-    i18nText(text(esc, '', 0, 5.1, -2.5, 0, { width: 11, color: '#3a4152' }), 'w3.floor2');
-    COLLIDERS.push({ x1: -4.6, x2: 4.6, z1: MALL.minZ + 1, z2: MALL.minZ + 7 });
-
-    // air mancur atrium
-    var f = make('a-entity', { position: '0 0 0' }, root);
-    make('a-cylinder', { position: '0 0.35 0', radius: 2.6, height: 0.7, color: '#c3ccd8', shadow: 'receive: true' }, f);
-    make('a-cylinder', { position: '0 0.72 0', radius: 2.3, height: 0.08, color: '#4fa8d8', opacity: 0.85, transparent: 'true' }, f);
-    make('a-cylinder', { position: '0 1.3 0', radius: 0.35, height: 1.6, color: '#e6e9ee' }, f);
-    make('a-sphere', { position: '0 2.35 0', radius: 0.55, color: '#7ec8ef', opacity: 0.8, transparent: 'true',
-      animation: 'property: position; to: 0 2.6 0; dir: alternate; loop: true; dur: 2200; easing: easeInOutSine' }, f);
-    COLLIDERS.push({ x1: -2.7, x2: 2.7, z1: -2.7, z2: 2.7 });
-
-    // papan direktori dekat pintu masuk
-    var dir = make('a-entity', { position: '-4.6 0 27' }, root);
-    box(dir, 0, 1.6, 0, 0.35, 3.2, 2.6, '#1b1f2b', { collide: true, origin: [-4.6, 27] });
-    i18nText(text(dir, '', 0.2, 2.5, 0, 90, { width: 3.4, color: '#ffb020' }), 'w3.dirTitle');
-    i18nText(text(dir, '', 0.2, 1.4, 0, 90, { width: 3, color: '#dfe5f0' }), 'w3.dirBody');
-
-    // bangku & planter sepanjang koridor
-    var props = document.getElementById('mall-props');
-    [22, 13, -1, -10, -19, -28].forEach(function (pz, i) {
-      var sx = i % 2 === 0 ? -4.2 : 4.2;
-      box(props, sx, 0.45, pz, 1.1, 0.16, 2.6, '#8a6f52', { collide: true });
-      box(props, sx, 0.2, pz, 0.7, 0.4, 2.2, '#5d5145', { cast: false });
-      var px = -sx;
-      make('a-cylinder', { position: px + ' 0.4 ' + pz, radius: 0.55, height: 0.8, color: '#9aa3ad' }, props);
-      make('a-sphere', { position: px + ' 1.15 ' + pz, radius: 0.72, color: '#3f8b52' }, props);
-      make('a-sphere', { position: (px + 0.35) + ' 0.95 ' + (pz + 0.3), radius: 0.5, color: '#4b9c5e' }, props);
-      COLLIDERS.push({ x1: px - 0.6, x2: px + 0.6, z1: pz - 0.6, z2: pz + 0.6 });
-    });
-  }
-
   var ACCENTS = {
     food: '#e6c184', fashion: '#d3a3c2', tech: '#8fb9df', auto: '#a6adbb', beauty: '#e8b6c6',
     office: '#c3c7cd', sport: '#93c9a5', kids: '#f2bd8c', books: '#b7abe0', home: '#c8b193',
@@ -940,241 +870,73 @@
   };
   function accentColor(cat) { return ACCENTS[cat && cat.k] || '#cfc7bb'; }
 
-  /* ------------------------------ bangun unit ------------------------------ */
-  var PRODUCT_LABELS = [];        // { el, product } label 3D yang ikut ganti bahasa
+  /* -------------------------------- dunia 3D -------------------------------- */
+  // Visual 3D dibangun oleh mall-world.js; di sini hanya jembatan data ↔ dunia.
+  var world = null;
+  var dragInfo = { x: 0, y: 0, t: 0, dragged: false, inCanvas: false };
+  function wasDrag() { return dragInfo.dragged; }
+  function guarded(fn) { return function (arg) { if (!wasDrag()) fn(arg); }; }
+  function sceneCanvas() { var sc = document.getElementById('scene'); return sc && sc.canvas; }
 
-  function buildUnits() {
-    var root = document.getElementById('mall-units');
-    UNITS.forEach(function (u) {
-      if (u.kind === 'shop') buildShop(u, root); else buildKiosk(u, root);
-      updateUnitVisual(u);
-    });
-  }
+  function updateUnitVisual(u) { if (world) world.updateUnit(u); }
 
-  // memasang satu produk di atas booth/etalase: model 3D + label + area klik
-  function mountProduct(parent, pr, x, y, z, rotY, hit) {
-    // alas pajangan kecil supaya produk terbaca sebagai display
-    make('a-cylinder', { position: x + ' ' + (y + 0.03) + ' ' + z, radius: 0.34, height: 0.06,
-      color: '#2a2f3a', metalness: 0.3, roughness: 0.5 }, parent);
-    var sc = pr.scale * (pr.show || 1);       // ukuran pajangan (AR tetap skala asli)
-    var spin = make('a-entity', {
-      position: x + ' ' + (y + 0.06 + pr.lift * (pr.show || 1)) + ' ' + z,
-      animation: 'property: rotation; to: 0 360 0; loop: true; dur: 18000; easing: linear'
-    }, parent);
-    make('a-gltf-model', {
-      src: pr.model, scale: sc + ' ' + sc + ' ' + sc, shadow: 'cast: true'
-    }, spin);
-
-    var label = text(parent, '', x, y + (hit ? hit.labelY || 0.75 : 0.75), z, rotY, { width: 2.2, color: '#ffffff' });
-    PRODUCT_LABELS.push({ el: label, product: pr });
-    refreshProductLabel(label, pr);
-
-    var hw = (hit && hit.w) || 0.7, hh = (hit && hit.h) || 0.55, hd = (hit && hit.d) || 0.7;
-    var target = make('a-box', {
-      position: x + ' ' + (y + hh / 2) + ' ' + z, width: hw, height: hh, depth: hd,
-      opacity: 0.001, transparent: 'true', 'class': 'clickable'
-    }, parent);
-    target.addEventListener('click', function () { openProduct(pr.id); });
-    target.addEventListener('mouseenter', function () {
-      hovered = null; hoveredProduct = pr;
+  function onWorldHover(target) {
+    hovered = (target && target.unit) || null;
+    hoveredProduct = (target && target.product) || null;
+    if (world) world.setHover(target);
+    var cv = sceneCanvas();
+    if (cv) cv.classList.toggle('is-pointer', !!target);
+    if (!target) { hideHint(); return; }
+    if (target.text) { showHint(target.text); return; }
+    if (target.product) {
+      var pr = target.product;
       showHint(t('hint.product', { name: '<b>' + esc(L(pr.name)) + '</b>', price: shortRp(pr.price) }));
-    });
-    target.addEventListener('mouseleave', function () { if (hoveredProduct === pr) hoveredProduct = null; hideHint(); });
-    return spin;
-  }
-
-  function refreshProductLabel(el, pr) {
-    el.setAttribute('value', L(pr.name).toUpperCase() + '\n' + shortRp(pr.price));
-  }
-
-  function buildShop(u, root) {
-    var e = make('a-entity', { position: u.cx + ' 0 ' + u.cz, id: 'unit-' + u.id }, root);
-    var fx = u.facing * (u.dx / 2);                  // x etalase relatif ke pusat unit
-    var bx = -fx;                                    // x dinding belakang
-    var rotY = u.facing > 0 ? 90 : -90;              // rotasi menghadap koridor
-    var org = [u.cx, u.cz];
-
-    // lantai unit
-    make('a-plane', { position: '0 0.04 0', rotation: '-90 0 0', width: u.dx, height: u.dz, color: '#efe6d8', roughness: 0.85 }, e);
-    // dinding belakang + samping
-    box(e, bx, WALL_H / 2, 0, 0.3, WALL_H, u.dz, '#e3ded4', { collide: true, origin: org });
-    box(e, 0, WALL_H / 2, -u.dz / 2, u.dx, WALL_H, 0.3, '#ded8cd', { collide: true, origin: org });
-    box(e, 0, WALL_H / 2,  u.dz / 2, u.dx, WALL_H, 0.3, '#ded8cd', { collide: true, origin: org });
-
-    // etalase kaca (dua panel, menyisakan pintu di tengah)
-    var panelW = (u.dz - DOOR_W) / 2;
-    [-1, 1].forEach(function (sgn) {
-      var pz = sgn * (DOOR_W / 2 + panelW / 2);
-      box(e, fx, 2.1, pz, 0.18, 4.2, panelW, '#9fc6dd', { collide: true, origin: org, opacity: 0.16, metalness: 0.2, roughness: 0.05 });
-      box(e, fx, 0.15, pz, 0.3, 0.3, panelW, '#6c7484', { collide: false });
-      // area klik unit: hanya di atas kaca, supaya pintu tetap bisa ditembus sinar kursor
-      var hit = make('a-plane', {
-        position: (fx + u.facing * 0.55) + ' 2.2 ' + pz, rotation: '0 ' + rotY + ' 0',
-        width: panelW, height: 4.4, opacity: 0.001, transparent: 'true', side: 'double',
-        'class': 'clickable'
-      }, e);
-      wireInteraction(hit, u);
-    });
-    // kusen pintu + bulkhead atas
-    box(e, fx, 4.3, 0, 0.4, 0.5, u.dz, '#2f3644', { collide: false });
-    box(e, fx, 4.75, 0, 0.36, 0.5, u.dz, '#3a4252', { collide: false });
-
-    // papan nama + strip status
-    var sx = fx + u.facing * 0.28;
-    box(e, sx, 5.35, 0, 0.16, 1.15, u.dz * 0.86, '#161a24', { collide: false });
-    u.refs.name = text(e, unitName(u), sx + u.facing * 0.1, 5.55, 0, rotY, { width: u.dz * 0.95, color: '#ffffff' });
-    u.refs.sub  = text(e, '', sx + u.facing * 0.1, 5.05, 0, rotY, { width: u.dz * 0.8, color: '#9aa3b5' });
-    u.refs.strip = box(e, fx + u.facing * 0.2, 4.62, 0, 0.1, 0.18, u.dz * 0.86, '#36d399', { collide: false });
-
-    // papan leasing di samping pintu (harga / tenant)
-    var bz = (DOOR_W / 2 + panelW / 2);
-    var bx2 = fx + u.facing * 0.34;
-    u.refs.frame = box(e, bx2, 1.8, bz, 0.08, 1.62, 2.02, '#36d399', { collide: false });
-    u.refs.board = box(e, bx2 + u.facing * 0.05, 1.8, bz, 0.06, 1.5, 1.9, '#12182a', { collide: false });
-    u.refs.boardTitle = text(e, '', bx2 + u.facing * 0.1, 2.28, bz, rotY, { width: 2.6, color: '#36d399' });
-    u.refs.boardBody  = text(e, '', bx2 + u.facing * 0.1, 1.68, bz, rotY, { width: 2.2, color: '#e7ebf3', wrap: 30 });
-
-    // backdrop interior berwarna kategori
-    box(e, bx + u.facing * 0.9, 1.4, 0, 0.25, 2.8, u.dz * 0.7, accentColor(u.cat), { cast: false });
-    u.refs.wallText = text(e, '', bx + u.facing * 1.1, 2.4, 0, rotY, { width: u.dz * 0.9, color: '#5b6273', wrap: 22 });
-
-    if (u.baseStatus === 'rented') {
-      // meja kasir di tengah belakang + dua booth produk di sisi kiri-kanan (lihat sketsa)
-      box(e, -u.facing * (u.dx / 2 - 1.8), 0.52, 0, 1.2, 1.04, 2.6, '#cbb79a', { collide: true, origin: org });
-      box(e, -u.facing * (u.dx / 2 - 1.8), 1.08, 0, 1.4, 0.08, 2.8, '#8a6f52', { collide: false });
-      u.refs.cashier = text(e, 'CASHIER', -u.facing * (u.dx / 2 - 2.6), 1.6, 0, rotY, { width: 2.4, color: '#7b8394' });
-
-      [-1, 1].forEach(function (sgn, i) {
-        var bzz = sgn * (u.dz / 2 - 1.05);
-        box(e, -u.facing * 1.2, 0.45, bzz, 2.6, 0.9, 1.1, '#e4dccc', { collide: true, origin: org });
-        box(e, -u.facing * 1.2, 0.92, bzz, 2.8, 0.06, 1.25, '#b9a688', { collide: false });
-        var pr = u.products.filter(function (p) { return p.booth === i; })[0];
-        if (pr) mountProduct(e, pr, -u.facing * 1.2, 0.95, bzz, rotY, { w: 1.0, h: 0.8, d: 1.0, labelY: 1.0 });
-      });
+      return;
     }
-
-    // showroom khusus: model Porsche dari repo ini
-    if (u.tenant === 'Porsche Gallery') {
-      make('a-cylinder', { position: '0 0.12 0', radius: 2.6, height: 0.24, color: '#20242e', metalness: 0.4, roughness: 0.4 }, e);
-      var turn = make('a-entity', { position: '0 0.24 0',
-        animation: 'property: rotation; to: 0 360 0; loop: true; dur: 22000; easing: linear' }, e);
-      make('a-gltf-model', { src: '#porsche-model', position: '0 0 0', rotation: '0 ' + (u.facing > 0 ? 90 : -90) + ' 0', shadow: 'cast: true' }, turn);
-      make('a-entity', { light: 'type: spot; intensity: 1.1; angle: 42; penumbra: 0.5; color: #fff1d8; castShadow: true; shadowMapWidth: 1024; shadowMapHeight: 1024', position: '0 4.2 0', rotation: '-90 0 0' }, e);
-      COLLIDERS.push({ x1: u.cx - 2.7, x2: u.cx + 2.7, z1: u.cz - 2.7, z2: u.cz + 2.7 });
-
-      var car = u.products.filter(function (p) { return p.booth === 'car'; })[0];
-      if (car) {
-        var carHit = make('a-box', {
-          position: '0 0.9 0', width: 5.0, height: 1.8, depth: 5.0,
-          opacity: 0.001, transparent: 'true', 'class': 'clickable'
-        }, e);
-        carHit.addEventListener('click', function () { openProduct(car.id); });
-        carHit.addEventListener('mouseenter', function () {
-          hovered = null; hoveredProduct = car;
-          showHint(t('hint.product', { name: '<b>' + esc(L(car.name)) + '</b>', price: shortRp(car.price) }));
-        });
-        carHit.addEventListener('mouseleave', function () { if (hoveredProduct === car) hoveredProduct = null; hideHint(); });
-        var carLabel = text(e, '', 0, 2.35, 0, rotY, { width: 3.4, color: '#ffffff' });
-        PRODUCT_LABELS.push({ el: carLabel, product: car });
-        refreshProductLabel(carLabel, car);
-      }
-
-      var link = make('a-plane', {
-        position: (bx + u.facing * 1.2) + ' 1.1 ' + (-u.dz / 2 + 1.6), rotation: '0 ' + rotY + ' 0',
-        width: 2.6, height: 0.7, color: '#ffb020', 'class': 'clickable'
-      }, e);
-      i18nText(make('a-text', { value: '', position: '0 0 0.02', align: 'center', color: '#241500', width: 4.6 }, link), 'w3.openShowroom');
-      link.addEventListener('click', function () { window.location.href = 'index.html'; });
-      link.addEventListener('mouseenter', function () { showHint(t('hint.showroom')); });
-      link.addEventListener('mouseleave', hideHint);
-    }
+    var u = target.unit, st = statusOf(u);
+    showHint('<b>' + unitName(u) + '</b> &middot; ' + u.area + ' m&sup2; &middot; ' +
+      (st === 'available' ? t('hint.rentPrice', { price: shortRp(u.monthly) })
+        : st === 'booked' ? t('hint.booked')
+        : t('hint.rented', { tenant: esc(u.tenant) })));
   }
 
-  function buildKiosk(u, root) {
-    var e = make('a-entity', { position: u.cx + ' 0 ' + u.cz, id: 'unit-' + u.id }, root);
-    var s = u.dx;
-    // counter
-    box(e, 0, 0.55, 0, s, 1.1, s, '#e8e1d3', { collide: true, origin: [u.cx, u.cz] });
-    box(e, 0, 1.15, 0, s + 0.3, 0.12, s + 0.3, '#6f5a3f', { collide: false });
-    // tiang + kanopi
-    [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(function (c) {
-      box(e, c[0] * (s / 2 - 0.15), 1.7, c[1] * (s / 2 - 0.15), 0.16, 3.4, 0.16, '#3c4250', { collide: false });
-    });
-    box(e, 0, 3.45, 0, s + 0.8, 0.22, s + 0.8, '#232936', { collide: false });
-    box(e, 0, 3.33, 0, s + 0.74, 0.04, s + 0.74, '#f3f0ea', { collide: false });
-    u.refs.strips = [
-      box(e, 0, 3.3, (s + 0.8) / 2, s + 0.84, 0.13, 0.06, '#36d399', { collide: false }),
-      box(e, 0, 3.3, -(s + 0.8) / 2, s + 0.84, 0.13, 0.06, '#36d399', { collide: false }),
-      box(e, (s + 0.8) / 2, 3.3, 0, 0.06, 0.13, s + 0.84, '#36d399', { collide: false }),
-      box(e, -(s + 0.8) / 2, 3.3, 0, 0.06, 0.13, s + 0.84, '#36d399', { collide: false })
-    ];
-    // papan nama dua sisi
-    u.refs.name = text(e, unitName(u), 0, 3.0, s / 2 + 0.42, 0, { width: 5.4, color: '#ffffff' });
-    u.refs.name2 = text(e, unitName(u), 0, 3.0, -s / 2 - 0.42, 180, { width: 5.4, color: '#ffffff' });
-    u.refs.boardTitle = text(e, '', 0, 2.55, s / 2 + 0.42, 0, { width: 4.2, color: '#36d399' });
-    u.refs.boardBody  = text(e, '', 0, 2.2, -s / 2 - 0.42, 180, { width: 4.2, color: '#e7ebf3' });
-    u.refs.sub = text(e, '', 0, 2.2, s / 2 + 0.42, 0, { width: 4.2, color: '#c8cede' });
-
-    // area klik kios: sebatas badan counter, supaya produk di atasnya tetap bisa diklik
-    var hit = make('a-box', {
-      position: '0 0.6 0', width: s + 0.6, height: 1.2, depth: s + 0.6,
-      opacity: 0.001, transparent: 'true', 'class': 'clickable'
-    }, e);
-    wireInteraction(hit, u);
-
-    var pr = u.products.filter(function (p) { return p.booth === 'counter'; })[0];
-    if (pr) mountProduct(e, pr, 0, 1.22, 0, 0, { w: 0.9, h: 0.7, d: 0.9, labelY: 0.95 });
+  function openSidebar(tab, filter) {
+    var tb = document.querySelector('#tabs [data-tab="' + tab + '"]');
+    if (tb) tb.click();
+    var fb = filter && document.querySelector('#filters [data-filter="' + filter + '"]');
+    if (fb) fb.click();
+    $('#sidebar').classList.remove('hidden');
   }
 
-  function wireInteraction(el, u) {
-    el.addEventListener('click', function () { openUnit(u.id); });
-    el.addEventListener('mouseenter', function () {
-      hovered = u; hoveredProduct = null;
-      var st = statusOf(u);
-      showHint('<b>' + unitName(u) + '</b> &middot; ' + u.area + ' m&sup2; &middot; ' +
-        (st === 'available' ? t('hint.rentPrice', { price: shortRp(u.monthly) })
-          : st === 'booked' ? t('hint.booked')
-          : t('hint.rented', { tenant: esc(u.tenant) })));
-    });
-    el.addEventListener('mouseleave', function () { if (hovered === u) hovered = null; hideHint(); });
+  function qualityPref() {
+    try { return localStorage.getItem(LS_QUALITY) || 'auto'; } catch (e) { return 'auto'; }
   }
 
-  /* ------------------------- update tampilan 3D unit ------------------------ */
-  function updateUnitVisual(u) {
-    var st = statusOf(u), meta = STATUS[st], r = u.refs;
-    var paint = function (el) {
-      if (!el) return;
-      el.setAttribute('material', 'color: ' + meta.color + '; emissive: ' + meta.color + '; emissiveIntensity: 0.55');
+  function worldContext(progress) {
+    var pref = qualityPref();
+    return {
+      sceneEl: document.getElementById('scene'),
+      unitsRoot: document.getElementById('mall-units'),
+      quality: pref === 'auto' ? null : pref,
+      MALL: MALL, FRONT_L: FRONT_L, FRONT_R: FRONT_R, DOOR_W: DOOR_W, Z_SLOTS: Z_SLOTS, ISLANDS: ISLANDS,
+      UNITS: UNITS, PRODUCTS: PRODUCTS, colliders: COLLIDERS,
+      statusOf: statusOf, unitName: unitName, t: t, L: L, shortRp: shortRp, rupiah: rupiah,
+      bookingOf: function (u) { return bookings[u.id]; },
+      stats: function () {
+        var avail = UNITS.filter(function (u) { return statusOf(u) === 'available'; });
+        return {
+          available: avail.length,
+          minPrice: avail.length ? Math.min.apply(null, avail.map(function (u) { return u.monthly; })) : 0
+        };
+      },
+      onHover: onWorldHover,
+      onUnitClick: guarded(function (u) { openUnit(u.id); }),
+      onProductClick: guarded(function (pr) { openProduct(pr.id); }),
+      onShowroom: guarded(function () { window.location.href = 'index.html'; }),
+      onDirectory: guarded(function () { openSidebar('spaces', 'all'); }),
+      onLeasing: guarded(function () { openSidebar('spaces', 'available'); }),
+      progress: progress
     };
-    paint(r.strip);
-    paint(r.frame);
-    if (r.strips) r.strips.forEach(paint);
-
-    var title, body, sub;
-    if (st === 'available') {
-      title = t('w3.forRent');
-      body = u.area + ' M2  |  ' + shortRp(u.monthly).toUpperCase() + ' ' + t('w3.perMonth') + '\n' +
-        L(u.cat).toUpperCase() + '\n' + t('w3.clickToRent');
-      sub = t('w3.availableSub') + ' • ' + u.area + ' M2';
-    } else if (st === 'booked') {
-      var b = bookings[u.id];
-      title = t('w3.reserved');
-      body = (b && b.brand ? b.brand.toUpperCase() : t('w3.yourBooking')) + '\n' +
-        (b ? b.months + ' ' + t('w3.months') : '') + '\n' + t('w3.awaiting');
-      sub = t('w3.reservedSub') + ' • ' + L(u.cat).toUpperCase();
-    } else {
-      title = t('w3.tenant');
-      body = (u.tenant || '').toUpperCase() + '\n' + L(u.cat).toUpperCase();
-      sub = u.tenant ? u.tenant.toUpperCase() : '';
-    }
-    if (r.boardTitle) { r.boardTitle.setAttribute('value', title); r.boardTitle.setAttribute('color', meta.color); }
-    if (r.boardBody) r.boardBody.setAttribute('value', body);
-    if (r.sub) r.sub.setAttribute('value', sub);
-    if (r.wallText) r.wallText.setAttribute('value', st === 'rented'
-      ? (u.tenant || '').toUpperCase()
-      : (st === 'booked' ? t('w3.openingSoon') : t('w3.readyToUse') + '\n' + u.area + ' M2'));
-    if (r.name) r.name.setAttribute('value', unitName(u));
-    if (r.name2) r.name2.setAttribute('value', unitName(u));
   }
 
   /* --------------------- kontrol jalan kaki + tabrakan ---------------------- */
@@ -1182,9 +944,26 @@
   var controls = null;    // instance komponen jalan kaki
   AFRAME.registerComponent('mall-controls', {
     init: function () {
-      this.prev = new THREE.Vector3(0, 1.6, 28);
+      this.prev = new THREE.Vector3(0, 1.6, 30.6);
       this.radius = 0.4;
+      this.glide = null;
+      this.turn = null;
       controls = this;
+    },
+    // berjalan mulus ke satu titik (tap-to-move / kunjungi unit)
+    glideTo: function (x, z, done) { this.glide = { x: x, z: z, v: 0, stuck: 0, done: done || null }; },
+    stopGlide: function () { this.glide = null; },
+    // putar kepala ke yaw tertentu dengan easing
+    turnTo: function (yaw, ms) {
+      var lc = this.el.components['look-controls'];
+      if (!lc) return;
+      var from = lc.yawObject.rotation.y, d = yaw - from;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      this.turn = { from: from, to: from + d, t0: performance.now(), ms: ms || 650, pitch: lc.pitchObject.rotation.x };
+    },
+    userInput: function () {
+      var wasd = this.el.components['wasd-controls'];
+      return (wasd && wasd.keys && Object.keys(wasd.keys).length > 0) || window.JOY.x || window.JOY.y;
     },
     // pindah ke satu titik, pastikan tidak berakhir di dalam objek
     place: function (x, z) {
@@ -1234,6 +1013,25 @@
         p.x += (-Math.sin(yaw) * fwd + Math.cos(yaw) * str) * speed;
         p.z += (-Math.cos(yaw) * fwd - Math.sin(yaw) * str) * speed;
       }
+      // glide: percepatan halus, perlambatan saat mendekat, batal kalau terhalang
+      if (this.glide && this.userInput()) this.glide = null;
+      var g = this.glide, step = 0;
+      if (g) {
+        var gx = g.x - p.x, gz = g.z - p.z, dist = Math.sqrt(gx * gx + gz * gz);
+        if (dist < 0.06) { var cb = g.done; this.glide = null; if (cb) cb(); }
+        else {
+          g.v = Math.min(Math.min(4.2, 0.6 + dist * 1.7), g.v + 7 * dt);
+          step = Math.min(dist, g.v * dt);
+          p.x += gx / dist * step; p.z += gz / dist * step;
+        }
+      }
+      if (this.turn) {
+        var lc = this.el.components['look-controls'], tr = this.turn;
+        var k = Math.min(1, (performance.now() - tr.t0) / tr.ms), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+        if (lc) { lc.yawObject.rotation.y = tr.from + (tr.to - tr.from) * e; lc.pitchObject.rotation.x = tr.pitch * (1 - e); }
+        if (k >= 1) this.turn = null;
+      }
+      var before = { x: p.x, z: p.z };
       p.y = 1.6;
       this.clamp(p);
 
@@ -1245,6 +1043,12 @@
         this.clamp(p);
       }
       if (!this.inside(p.x, p.z)) prev.set(p.x, 1.6, p.z);
+      if (g && this.glide && step > 0) {
+        var moved = Math.abs(p.x - before.x) + Math.abs(p.z - before.z);
+        if (moved > 0.001) g.stuck++;                  // didorong balik oleh tabrakan
+        else g.stuck = Math.max(0, g.stuck - 1);
+        if (g.stuck > 10) this.glide = null;
+      }
     }
   });
 
@@ -1365,14 +1169,45 @@
         }
       }
     } else { px = 0; pz = u.cz + 6.2; }
-    if (controls) controls.place(px, pz); else cam.object3D.position.set(px, 1.6, pz);
-    px = cam.object3D.position.x; pz = cam.object3D.position.z;
-    var dx = u.cx - px, dz = u.cz - pz;
-    var lc = cam.components['look-controls'];
-    if (lc) { lc.yawObject.rotation.y = Math.atan2(-dx, -dz); lc.pitchObject.rotation.x = 0; }
+    var yaw = Math.atan2(-(u.cx - px), -(u.cz - pz));
     if (window.matchMedia('(max-width: 820px)').matches) $('#sidebar').classList.add('hidden');
     modalEl.classList.remove('open'); pmodalEl.classList.remove('open');
+    moveTo(px, pz, yaw);
     toast(t('toast.teleport', { name: unitName(u) }));
+  }
+
+  // jarak dekat → berjalan mulus; jauh → fade singkat lalu pindah (seperti platform tur 3D)
+  function moveTo(x, z, yaw) {
+    var cam = $('#cam');
+    if (!cam || !controls) return;
+    var p = cam.object3D.position, d = Math.hypot(x - p.x, z - p.z);
+    if (d < 12 && reachable(x, z)) {
+      controls.glideTo(x, z);
+      if (yaw !== undefined) controls.turnTo(yaw, Math.min(1200, 500 + d * 60));
+      return;
+    }
+    var fade = $('#fade');
+    fade.classList.add('on');
+    setTimeout(function () {
+      controls.stopGlide();
+      controls.place(x, z);
+      if (yaw !== undefined) {
+        var lc = cam.components['look-controls'];
+        if (lc) { lc.yawObject.rotation.y = yaw; lc.pitchObject.rotation.x = 0; }
+      }
+      setTimeout(function () { fade.classList.remove('on'); }, 60);
+    }, 230);
+  }
+
+  // titik bisa dicapai lurus tanpa menembus dinding/objek?
+  function reachable(x, z) {
+    var cam = $('#cam');
+    if (!cam || !controls || controls.inside(x, z)) return false;
+    var p = cam.object3D.position, dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz);
+    if (d > 30 || d < 0.4) return false;
+    var n = Math.ceil(d / 0.25);
+    for (var i = 1; i <= n; i++) if (controls.inside(p.x + dx * i / n, p.z + dz * i / n)) return false;
+    return true;
   }
 
   /* ---------------------------- panel detail unit --------------------------- */
@@ -1462,8 +1297,9 @@
   }
 
   /* ------------------- panel produk: pratinjau 3D + view in AR --------------- */
-  var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // AR Quick Look (iPhone/iPad) butuh berkas .usdz — dibuat oleh tools/glb-to-usdz.py
+  // dan diletakkan bersebelahan dengan .glb-nya
+  function iosSrc(pr) { return pr.model.replace(/\.glb$/i, '.usdz'); }
 
   function openProduct(id) {
     var pr = PROD_BY_ID[id];
@@ -1481,7 +1317,8 @@
       '</div>' +
       '<div class="sheet-body">' +
         '<div class="mv-wrap">' +
-          '<model-viewer id="mv" src="' + pr.model + '" alt="' + esc(L(pr.name)) + '"' +
+          '<model-viewer id="mv" src="' + pr.model + '" ios-src="' + iosSrc(pr) + '"' +
+            ' alt="' + esc(L(pr.name)) + '"' +
             ' camera-controls auto-rotate auto-rotate-delay="800" shadow-intensity="1" exposure="1.05"' +
             ' environment-image="neutral" ar ar-modes="webxr scene-viewer quick-look" ar-scale="auto"' +
             ' touch-action="pan-y" loading="eager">' +
@@ -1514,7 +1351,7 @@
       if (done) return;
       done = true;
       if (!window.customElements || !customElements.get('model-viewer')) { note.textContent = t('p.mvFail'); return; }
-      note.innerHTML = mv.canActivateAR ? '' : t('p.arUnsupported') + (IS_IOS ? ' ' + t('p.arIos') : '');
+      note.innerHTML = mv.canActivateAR ? '' : t('p.arUnsupported');
     };
     if (window.customElements && customElements.whenDefined) {
       customElements.whenDefined('model-viewer').then(function () { setTimeout(tell, 300); });
@@ -1681,10 +1518,9 @@
       });
     }
 
-    // teks di dalam dunia 3D
-    I18N_3D.forEach(function (it) { it.el.setAttribute('value', t(it.key)); });
-    PRODUCT_LABELS.forEach(function (it) { refreshProductLabel(it.el, it.product); });
-    UNITS.forEach(updateUnitVisual);
+    // teks di dalam dunia 3D (signage kanvas digambar ulang)
+    if (world) world.refreshTexts();
+    showQuality();
 
     renderStats(); renderList(); drawMap();
     if (openUnitId && modalEl.classList.contains('open')) openUnit(openUnitId);
@@ -1727,10 +1563,18 @@
         ctx.fillText(u.id, p[0] + (u.dx * s.sx) / 2, p[1] + (u.dz * s.sz) / 2);
       }
     });
-    // air mancur
-    var f = toMap(0, 0);
-    ctx.fillStyle = 'rgba(126,200,239,.8)';
-    ctx.beginPath(); ctx.arc(f[0], f[1], 2.6 * s.sx, 0, Math.PI * 2); ctx.fill();
+    // air mancur, pulau taman, eskalator, meja leasing (dari mall-world)
+    (world ? world.features : []).forEach(function (ft) {
+      if (ft.type === 'circle') {
+        var f = toMap(ft.x, ft.z);
+        ctx.fillStyle = 'rgba(126,200,239,.8)';
+        ctx.beginPath(); ctx.arc(f[0], f[1], ft.r * s.sx, 0, Math.PI * 2); ctx.fill();
+      } else {
+        var a = toMap(ft.x1, ft.z1);
+        ctx.fillStyle = ft.label === 'ESC' ? 'rgba(255,176,32,.55)' : 'rgba(255,255,255,.28)';
+        ctx.fillRect(a[0], a[1], (ft.x2 - ft.x1) * s.sx, (ft.z2 - ft.z1) * s.sz);
+      }
+    });
     // pintu masuk
     var en = toMap(-6, MALL.maxZ - 0.6);
     ctx.fillStyle = '#ffb020';
@@ -1757,8 +1601,8 @@
     var z = MALL.minZ + ((ev.clientY - rect.top) / rect.height) * canvas.height / s.sz;
     var cam = $('#cam');
     if (!cam) return;
-    if (controls) controls.place(x, z); else cam.object3D.position.set(x, 1.6, z);
-    toast(t('toast.moved', { x: Math.round(cam.object3D.position.x), z: Math.round(cam.object3D.position.z) }));
+    moveTo(x, z);
+    toast(t('toast.moved', { x: Math.round(x), z: Math.round(z) }));
   });
 
   /* -------------------------------- joystick -------------------------------- */
@@ -1875,20 +1719,125 @@
     setTimeout(function () { requestAnimationFrame(loop); }, 60);
   }
 
+  /* ------------------------ tap-to-move & mode VR ------------------------ */
+  function initNavigation() {
+    var sceneEl = document.getElementById('scene'), cv = sceneEl.canvas, floorEl = world.floorEl;
+
+    // bedakan klik vs drag (drag = memutar kamera)
+    cv.addEventListener('pointerdown', function (e) {
+      dragInfo.x = e.clientX; dragInfo.y = e.clientY; dragInfo.t = performance.now(); dragInfo.dragged = false;
+    });
+    var lastMouse = null;
+    cv.addEventListener('mousemove', function (e) { lastMouse = { clientX: e.clientX, clientY: e.clientY, type: 'mousemove', target: cv }; });
+    cv.addEventListener('pointermove', function (e) {
+      if (e.buttons && Math.hypot(e.clientX - dragInfo.x, e.clientY - dragInfo.y) > 8) dragInfo.dragged = true;
+      if (e.pointerType === 'mouse') {                     // hint mengikuti pointer di desktop
+        hintEl.style.left = e.clientX + 'px';
+        hintEl.style.top = (e.clientY + 26) + 'px';
+      }
+    });
+    cv.addEventListener('pointerup', function (e) {
+      if (Math.hypot(e.clientX - dragInfo.x, e.clientY - dragInfo.y) > 8 || performance.now() - dragInfo.t > 650) dragInfo.dragged = true;
+    });
+    cv.addEventListener('pointerenter', function () { dragInfo.inCanvas = true; });
+    cv.addEventListener('pointerleave', function () { dragInfo.inCanvas = false; world.reticle.hide(); });
+
+    floorEl.addEventListener('click', function (e) {
+      if (wasDrag()) return;
+      var hit = e.detail && e.detail.intersection;
+      if (!hit || !reachable(hit.point.x, hit.point.z)) return;
+      world.reticle.ping(hit.point.x, hit.point.z);
+      controls.glideTo(hit.point.x, hit.point.z);
+    });
+
+    // reticle mengikuti titik lantai di bawah pointer
+    var inVR = false, camObj = document.getElementById('cam').object3D, lastPose = '';
+    sceneEl.addBehavior({
+      el: sceneEl,
+      tick: function () {
+        // kursor A-Frame (rayOrigin: mouse) hanya menghitung sinar saat mouse bergerak;
+        // saat kamera berjalan/berputar, sinar disegarkan dari posisi pointer terakhir
+        var pose = camObj.position.x.toFixed(2) + camObj.position.z.toFixed(2) + camObj.rotation.y.toFixed(3) + camObj.rotation.x.toFixed(3);
+        if (pose !== lastPose && lastMouse && dragInfo.inCanvas && !inVR && sceneEl.components.cursor) {
+          sceneEl.components.cursor.onMouseMove(lastMouse);
+        }
+        lastPose = pose;
+        var rc = sceneEl.components.raycaster, hit = rc && rc.intersections && rc.intersections[0];
+        if (!inVR && dragInfo.inCanvas && hit && hit.object && hit.object.el === floorEl) {
+          var ok = reachable(hit.point.x, hit.point.z);
+          world.reticle.show(hit.point.x, hit.point.z, ok);
+          cv.classList.toggle('is-walk', ok);
+        } else {
+          world.reticle.hide();
+          cv.classList.remove('is-walk');
+        }
+      }
+    });
+
+    // di headset VR: kursor gaze di tengah pandangan, raycaster mouse dimatikan
+    var vrCursor = document.getElementById('vr-cursor');
+    sceneEl.addEventListener('enter-vr', function () {
+      inVR = true;
+      sceneEl.setAttribute('raycaster', 'enabled', false);
+      vrCursor.setAttribute('raycaster', 'enabled', true);
+      vrCursor.setAttribute('visible', true);
+    });
+    sceneEl.addEventListener('exit-vr', function () {
+      inVR = false;
+      sceneEl.setAttribute('raycaster', 'enabled', true);
+      vrCursor.setAttribute('raycaster', 'enabled', false);
+      vrCursor.setAttribute('visible', false);
+    });
+  }
+
+  function showQuality() {
+    var pref = qualityPref();
+    Array.prototype.forEach.call(document.querySelectorAll('#qseg button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-q') === pref));
+    });
+    var qa = $('#q-active');
+    if (qa) qa.textContent = world ? t('q.active', { q: t('q.' + world.quality) }) : '';
+  }
+
+  function buildWorld() {
+    var bar = $('#loader-bar'), label = $('#loader-label');
+    MallWorld.create(worldContext(function (f, key) {
+      bar.style.width = Math.round(f * 100) + '%';
+      label.textContent = t('load.' + key);
+    })).then(function (w) {
+      world = w;
+      initNavigation();
+      showQuality();
+      drawMap();
+      setTimeout(function () { $('#loader').classList.add('done'); }, 250);
+    }).catch(function (err) {
+      console.error(err);
+      label.textContent = String(err && err.message || err);
+    });
+  }
+
   function init() {
     var saved = null;
     try { saved = localStorage.getItem(LS_LANG); } catch (e) {}
     lang = saved === 'id' ? 'id' : 'en';     // bahasa default: English
 
     buildData();
-    buildStructure();
-    buildUnits();
     initUI();
     applyLang(lang);
     // pastikan komponen jalan kaki aktif (didaftarkan setelah scene di-parse)
     var cam = document.getElementById('cam');
     if (cam) cam.setAttribute('mall-controls', '');
     loop();
+
+    $('#qseg').addEventListener('click', function (e) {
+      var q = e.target.getAttribute && e.target.getAttribute('data-q');
+      if (!q || q === qualityPref()) return;
+      try { localStorage.setItem(LS_QUALITY, q); } catch (err) {}
+      window.location.reload();                     // tekstur & bayangan dibangun ulang dari awal
+    });
+
+    var sceneEl = document.getElementById('scene');
+    if (sceneEl.hasLoaded) buildWorld(); else sceneEl.addEventListener('loaded', buildWorld);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
