@@ -30,6 +30,10 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
   yang dirender saat mulai (refleksi nyata di marmer, kaca, dan logam), lampu koridor hangat,
   dan cove LED di bawah mezanin. Matahari hanya masuk lewat skylight: atap memproyeksikan
   bayangan sehingga rangka baja skylight menggambar pola garis di lantai, kolom, dan dinding
+- **HUD ringkas**: satu pill okupansi (● tersedia · bar · %) — ketuk untuk rincian unit dan
+  tombol *Browse available spaces*; semua kontrol (Directory, Map, siang/malam, EN/ID, bantuan)
+  ada di satu toolbar yang menjadi ikon saja di layar sempit. HUD meredup otomatis saat berjalan
+  dan kembali penuh saat berhenti; joystick transparan dan baru berwarna saat disentuh
 - **Siang & malam**: tombol ☀/☾ di header, atau **?** → Lighting (Auto / Day / Night).
   *Auto* mengikuti jam perangkat (siang 06.00–18.00). Malam memakai environment map sendiri,
   cahaya bulan dingin yang tetap membentuk pola skylight, langit berbintang dengan bulan,
