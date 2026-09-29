@@ -18,9 +18,9 @@
   var PRESETS = {
     // bayangan matahari/bulan dirender sekali ke shadow map statis (hanya dihitung ulang
     // saat siang↔malam berganti), jadi cukup murah untuk tablet
-    low:    { name: 'low',    pixelRatio: 1,   tex: 512,  floorTex: 1024, shadows: false, shadowSize: 0,    softShadows: false, points: 1, flora: 0.5, shafts: false, jets: false, aniso: 2 },
-    medium: { name: 'medium', pixelRatio: 1.5, tex: 512,  floorTex: 1024, shadows: true,  shadowSize: 2048, softShadows: false, points: 2, flora: 1,   shafts: true,  jets: true,  aniso: 4 },
-    high:   { name: 'high',   pixelRatio: 2,   tex: 1024, floorTex: 2048, shadows: true,  shadowSize: 4096, softShadows: true,  points: 4, flora: 1,   shafts: true,  jets: true,  aniso: 8 }
+    low:    { name: 'low',    pixelRatio: 1,   tex: 512,  floorTex: 1024, shadows: false, shadowSize: 0,    softShadows: false, points: 1, flora: 0.5, shafts: false, jets: false, aniso: 2, reflect: 0 },
+    medium: { name: 'medium', pixelRatio: 1.5, tex: 512,  floorTex: 1024, shadows: true,  shadowSize: 2048, softShadows: false, points: 2, flora: 1,   shafts: true,  jets: true,  aniso: 4, reflect: 0 },
+    high:   { name: 'high',   pixelRatio: 2,   tex: 1024, floorTex: 2048, shadows: true,  shadowSize: 4096, softShadows: true,  points: 4, flora: 1,   shafts: true,  jets: true,  aniso: 8, reflect: 0.5 }
   };
 
   function detectQuality(pref) {
@@ -160,22 +160,31 @@
 
   // marmer poles format besar: 2×2 ubin per tekstur, urat halus, nat tipis
   TextureFactory.prototype.marble = function () {
-    var N = new TileNoise(11), N2 = new TileNoise(29);
+    var N = new TileNoise(11), N2 = new TileNoise(29), N3 = new TileNoise(47);
     var S = Math.min(this.Q.floorTex, 1024);
+    // dengan clearcoat, lapisan dasar dibuat "honed" (lebih kasar); kilapnya dari lapisan coat
+    var honed = this.Q.name !== 'low';
     return this.bake('marble', S, this.Q.floorTex, function (u, v, o) {
       var tile = (Math.floor(u * 2) + Math.floor(v * 2) * 2);
       var tu = (u * 2) % 1, tv = (v * 2) % 1;
-      var grout = Math.min(tu, 1 - tu, tv, 1 - tv) < 0.0035;
-      var warp = N.fbm(u, v, 4, 5);
-      var vein = Math.abs(Math.sin((u * 1.3 + v * 0.7 + tile * 0.21) * 9 + warp * 7.5));
-      vein = Math.pow(1 - vein, 14) * 0.85 + Math.pow(1 - vein, 60) * 0.5;
+      var gd = Math.min(tu, 1 - tu, tv, 1 - tv);
+      var grout = gd < 0.0035;
+      // domain warping dua tingkat → urat bercabang yang tidak terlihat "sinus"
+      var w1 = N.fbm(u, v, 4, 5), w2 = N3.fbm(u + w1 * 0.08, v - w1 * 0.05, 8, 4);
+      var vein = Math.abs(Math.sin((u * 1.3 + v * 0.7 + tile * 0.21) * 9 + w1 * 7.5 + w2 * 2.2));
+      vein = Math.pow(1 - vein, 14) * 0.8 + Math.pow(1 - vein, 70) * 0.55;
+      var fine = Math.abs(Math.sin((v * 1.6 - u * 0.5 + tile * 0.37) * 23 + w2 * 11));
+      fine = Math.pow(1 - fine, 90) * 0.4 * (0.4 + w1);
       var cloud = N2.fbm(u, v, 3, 4);
-      var base = 198 + (cloud - 0.5) * 18 + (tile % 2 ? 3 : -2);
-      var r = base - vein * 70, g = base - 4 - vein * 72, b = base - 12 - vein * 70;
+      var crystal = N3.at(u * 512, v * 512, 512);
+      var base = 200 + (cloud - 0.5) * 20 + (tile % 2 ? 3 : -2) + (crystal - 0.5) * 5;
+      var vv = Math.min(1, vein + fine);
+      // urat sedikit hangat keabu-abuan, awan dasar sedikit krem
+      var r = base - vv * 74 + cloud * 3, g = base - 3 - vv * 74, b = base - 10 - vv * 68;
       if (grout) { r = 150; g = 146; b = 140; }
       o.r = r; o.g = g; o.b = b;
-      o.h = grout ? 0 : 0.6 + cloud * 0.08;
-      o.rough = grout ? 0.85 : 0.2 + cloud * 0.1 + vein * 0.05;
+      o.h = grout ? 0 : 0.6 + cloud * 0.05 - vv * 0.035 - (gd < 0.008 ? (0.008 - gd) * 20 : 0);
+      o.rough = grout ? 0.85 : honed ? 0.36 + cloud * 0.12 + vv * 0.1 : 0.2 + cloud * 0.1 + vein * 0.05;
     }, 3);
   };
 
@@ -234,7 +243,23 @@
         ctx.closePath(); ctx.fill();
       }
     }
-    var set = { map: this.tex(upscale(c, this.Q.tex), true), roughnessMap: null, normalMap: null };
+    // serpih batu lebih mengilap & sedikit menonjol dari matriks semen
+    var px = ctx.getImageData(0, 0, S, S).data, hgt = new Float32Array(S * S);
+    var rc = makeCanvas(S), rctx = rc.getContext('2d'), rimg = rctx.createImageData(S, S), N = new TileNoise(19);
+    for (var p = 0; p < S * S; p++) {
+      var dr = px[p * 4] - 233, dg = px[p * 4 + 1] - 226, db = px[p * 4 + 2] - 214;
+      var chip = Math.min(1, Math.sqrt(dr * dr + dg * dg + db * db) / 40);
+      var nz = N.fbm((p % S) / S, Math.floor(p / S) / S, 8, 3);
+      hgt[p] = chip * 0.5 + nz * 0.08;
+      var rv = (0.4 - chip * 0.2 + nz * 0.12) * 255;
+      rimg.data[p * 4] = rimg.data[p * 4 + 1] = rimg.data[p * 4 + 2] = rv; rimg.data[p * 4 + 3] = 255;
+    }
+    rctx.putImageData(rimg, 0, 0);
+    var set = {
+      map: this.tex(upscale(c, this.Q.tex), true),
+      roughnessMap: this.tex(upscale(rc, this.Q.tex), false),
+      normalMap: this.tex(upscale(heightToNormal(hgt, S, 1.2), this.Q.tex), false)
+    };
     this.cache.terrazzo = set;
     return set;
   };
@@ -273,6 +298,24 @@
       o.r = o.g = o.b = 200 + s * 40;
       o.h = s * 0.2; o.rough = 0.25 + s * 0.2;
     }, 0.4);
+  };
+
+  // noda poles/bekas pel untuk clearcoatRoughnessMap: nilai rendah = kilap cermin
+  TextureFactory.prototype.smudge = function () {
+    if (this.cache.smudge) return this.cache.smudge;
+    var N = new TileNoise(83), N2 = new TileNoise(89), S = 256;
+    var c = makeCanvas(S), ctx = c.getContext('2d'), img = ctx.createImageData(S, S);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var u = x / S, v = y / S;
+      var blot = N.fbm(u, v, 3, 5);
+      var wipe = Math.abs(Math.sin((u * 0.8 + v * 1.1) * 14 + N2.fbm(u, v, 4, 3) * 6));
+      var val = 0.22 + Math.pow(clamp01((blot - 0.45) * 2.4), 1.6) * 0.6 + Math.pow(1 - wipe, 6) * 0.14 + N2.at(u * 128, v * 128, 128) * 0.06;
+      var i = (y * S + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = clamp01(val) * 255; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    var t = this.tex(c, false);
+    this.cache.smudge = t;
+    return t;
   };
 
   // tekstur daun (alpha): pelepah palem & rumpun daun
@@ -375,7 +418,17 @@
     this.tf = tf; this.Q = Q; this.env = envMap;
     this.paints = {};
     var self = this;
-    function std(o) { var m = new T.MeshStandardMaterial(o); m.envMapIntensity = o.envMapIntensity || 1; return m; }
+    // Tier medium/high memakai MeshPhysicalMaterial untuk lapisan clearcoat (lantai poles,
+    // pernis kayu, cat piano) dan sheen (kain). Tier low tetap MeshStandardMaterial.
+    var rich = Q.name !== 'low';
+    var PHYS = ['clearcoat', 'clearcoatRoughness', 'clearcoatRoughnessMap', 'sheen', 'sheenColor', 'sheenRoughness'];
+    function std(o) {
+      var phys = rich && PHYS.some(function (k) { return k in o; });
+      if (!phys) PHYS.forEach(function (k) { delete o[k]; });
+      var m = phys ? new T.MeshPhysicalMaterial(o) : new T.MeshStandardMaterial(o);
+      m.envMapIntensity = o.envMapIntensity || 1;
+      return m;
+    }
     function withTex(set, o) {
       o.map = set.map; if (set.roughnessMap) o.roughnessMap = set.roughnessMap;
       if (set.normalMap) { o.normalMap = set.normalMap; o.normalScale = new T.Vector2(o.ns || 0.6, o.ns || 0.6); }
@@ -384,13 +437,18 @@
     }
     var marble = tf.marble(), granite = tf.granite(), wood = tf.wood(), terr = tf.terrazzo(),
         conc = tf.concrete(), plas = tf.plaster(), brushed = tf.brushed();
+    // noda poles dibuat lebih besar dari ubin supaya pola ubin tidak terlihat berulang
+    var smudge = rich ? tf.smudge() : null, smudgeWide = null;
+    if (smudge) { smudgeWide = smudge.clone(); smudgeWide.repeat.set(0.37, 0.37); smudgeWide.needsUpdate = true; }
 
-    this.marble   = withTex(marble,  { roughness: 1, metalness: 0, envMapIntensity: 0.8, ns: 0.35 });
-    this.granite  = withTex(granite, { roughness: 1, metalness: 0, envMapIntensity: 1.0, ns: 0.4 });
-    this.wood     = withTex(wood,    { roughness: 1, metalness: 0, ns: 0.5 });
-    this.woodDark = withTex(wood,    { roughness: 1, metalness: 0, color: 0x6b4b33, ns: 0.5 });
-    this.terrazzo = withTex(terr,    { roughness: 0.28, metalness: 0 });
-    this.concrete = withTex(conc,    { roughness: 1, metalness: 0, ns: 0.5 });
+    this.marble   = withTex(marble,  { roughness: 1, metalness: 0, envMapIntensity: 0.8, ns: 0.35,
+                                       clearcoat: 1, clearcoatRoughness: 0.2, clearcoatRoughnessMap: smudgeWide });
+    this.granite  = withTex(granite, { roughness: 1, metalness: 0, envMapIntensity: 1.0, ns: 0.4,
+                                       clearcoat: 0.7, clearcoatRoughness: 0.12, clearcoatRoughnessMap: smudge });
+    this.wood     = withTex(wood,    { roughness: 1, metalness: 0, ns: 0.5, clearcoat: 0.4, clearcoatRoughness: 0.28 });
+    this.woodDark = withTex(wood,    { roughness: 1, metalness: 0, color: 0x6b4b33, ns: 0.5, clearcoat: 0.45, clearcoatRoughness: 0.22 });
+    this.terrazzo = withTex(terr,    { roughness: 1, metalness: 0, ns: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.1, clearcoatRoughnessMap: smudge });
+    this.concrete = withTex(conc,    { roughness: 1, metalness: 0, ns: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.35 });
     this.plaster  = withTex(plas,    { roughness: 1, metalness: 0, color: 0xf3f0ea, ns: 0.3 });
     this.ceiling  = withTex(plas,    { roughness: 1, metalness: 0, color: 0xfaf8f4, ns: 0.2 });
     this.fascia   = std({ color: 0xf4f2ee, roughness: 0.32, metalness: 0 });
@@ -398,12 +456,12 @@
     this.metalDark  = std({ color: 0x1b1e24, roughness: 1, metalness: 0.75, roughnessMap: brushed.roughnessMap });
     this.metalSteel = std({ color: 0xaeb5bd, roughness: 1, metalness: 1, roughnessMap: brushed.roughnessMap, envMapIntensity: 1.2 });
     this.brass      = std({ color: 0xc9a45c, roughness: 0.28, metalness: 1, envMapIntensity: 1.3 });
-    this.blackGloss = std({ color: 0x0f1115, roughness: 0.16, metalness: 0.2 });
+    this.blackGloss = std({ color: 0x0f1115, roughness: 0.3, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.04 });
     this.rubber     = std({ color: 0x0c0d0f, roughness: 0.55, metalness: 0 });
     this.bark       = std({ color: 0x5a4636, roughness: 0.95, metalness: 0 });
     this.soil       = std({ color: 0x2e241c, roughness: 1, metalness: 0 });
     this.planter    = std({ color: 0xe9e4dc, roughness: 0.5, metalness: 0 });
-    this.cushion    = std({ color: 0x3a3f47, roughness: 0.85, metalness: 0 });
+    this.cushion    = std({ color: 0x3a3f47, roughness: 0.85, metalness: 0, sheen: 1, sheenColor: new T.Color(0x9aa3b4), sheenRoughness: 0.55 });
 
     // kaca etalase: tanpa transmission pass (mahal di iPad), refleksi dari env map
     this.glass = new T.MeshPhysicalMaterial({
@@ -772,13 +830,15 @@
     var TOD = {
       day: {
         dir: new T.Vector3(0.24, 1, 0.3).normalize(), color: new T.Color(0xfff0d8),
-        sun: Q.shadows ? 12 : 1.4, hemiSky: new T.Color(0xeaf2ff), hemiGround: new T.Color(0x74644f), hemi: Q.shadows ? 0.22 : 0.45,
-        point: 30, exposure: Q.shadows ? 0.9 : 1.0
+        sun: Q.shadows ? 12 : 1.4, hemiSky: new T.Color(0xeaf2ff), hemiGround: new T.Color(0x74644f), hemi: Q.shadows ? 0.3 : 0.75,
+        point: 30, exposure: Q.shadows ? 0.9 : 1.0,
+        fog: new T.Color(0xd4d9df), fogDensity: 0.004
       },
       night: {
         dir: new T.Vector3(-0.32, 0.9, -0.3).normalize(), color: new T.Color(0x9fb6ff),
-        sun: Q.shadows ? 0.6 : 0.2, hemiSky: new T.Color(0x1b2442), hemiGround: new T.Color(0x0d0c0b), hemi: 0.05,
-        point: 55, exposure: 0.78
+        sun: Q.shadows ? 0.6 : 0.2, hemiSky: new T.Color(0x1b2442), hemiGround: new T.Color(0x0d0c0b), hemi: Q.shadows ? 0.07 : 0.12,
+        point: 55, exposure: 0.85,
+        fog: new T.Color(0x0c0f17), fogDensity: 0.0075
       }
     };
 
@@ -815,6 +875,8 @@
         return p;
       });
       W.tod = { k: 0, target: 0 };
+      // kabut eksponensial tipis: perspektif udara di koridor 68 m (langit tidak terpengaruh)
+      scene.fog = new T.FogExp2(TOD.day.fog.getHex(), TOD.day.fogDensity);
     }
 
     // kamera bayangan dipas ke kotak gedung dilihat dari arah cahaya → resolusi tidak terbuang
@@ -860,11 +922,14 @@
       W.hemi.intensity = lerp(D.hemi, N.hemi, e);
       W.points.forEach(function (p) { p.intensity = lerp(D.point, N.point, e); });
       renderer.toneMappingExposure = lerp(D.exposure, N.exposure, e);
+      if (W.hdrU) W.hdrU.uHdrExposure.value = renderer.toneMappingExposure;
       W.sky.material.uniforms.uNight.value = e;
       scene.environment = e < 0.5 ? W.envDay : W.envNight;
       if (W.shaftMat) W.shaftMat.uniforms.uStrength.value = 1 - e;
       (W.lampGlows || []).forEach(function (g) { g.material.opacity = e * 0.95; });
       (W.lampHeads || []).forEach(function (m) { m.color.setScalar(0.25 + e * 0.75); });
+      if (scene.fog) { scene.fog.color.copy(D.fog).lerp(N.fog, e); scene.fog.density = lerp(D.fogDensity, N.fogDensity, e); }
+      if (W.post) W.post.setNight(e);
       fitShadow();
     }
 
@@ -2056,6 +2121,146 @@
       }
     }
 
+    /* ------------------- refleksi planar lantai marmer (high) ------------------- */
+    // Lantai koridor dirender ulang dari kamera cermin (setengah resolusi) lalu disisipkan
+    // ke radiance lapisan clearcoat marmer. Fresnel clearcoat membuat pantulan kuat di
+    // sudut miring dan tipis saat melihat ke bawah; roughness noda poles mengaburkan
+    // pantulan lewat mipmap.
+    function buildFloorReflection() {
+      var M = W.mat.marble;
+      if (!Q.reflect || !M.isMeshPhysicalMaterial) return;
+      var floorMeshes = [];
+      W.root.traverse(function (o) { if (o.isMesh && o.material === M) floorMeshes.push(o); });
+      if (!floorMeshes.length) return;
+      var rt = new T.WebGLRenderTarget(4, 4, {
+        type: T.HalfFloatType, generateMipmaps: true, minFilter: T.LinearMipmapLinearFilter, magFilter: T.LinearFilter
+      });
+      var uniforms = { tReflect: { value: rt.texture }, uReflectMatrix: { value: new T.Matrix4() }, uReflect: { value: 1 } };
+      var mirror = new T.PerspectiveCamera(), normal = new T.Vector3(0, 1, 0);
+      var camPos = new T.Vector3(), rot = new T.Matrix4(), lookAt = new T.Vector3(), planePt = new T.Vector3();
+      var view = new T.Vector3(), target = new T.Vector3(), plane = new T.Plane(), clip = new T.Vector4(), q = new T.Vector4();
+      var size = new T.Vector2(), dirty = true;
+
+      M.onBeforeCompile = function (sh) {
+        Object.assign(sh.uniforms, uniforms);
+        sh.vertexShader = 'uniform mat4 uReflectMatrix;\nvarying vec4 vReflUv;\n' + sh.vertexShader.replace('#include <project_vertex>',
+          '#include <project_vertex>\nvReflUv = uReflectMatrix * (modelMatrix * vec4(transformed, 1.0));');
+        sh.fragmentShader = 'uniform sampler2D tReflect;\nuniform float uReflect;\nvarying vec4 vReflUv;\n' + sh.fragmentShader.replace('#include <lights_fragment_maps>', [
+          '#include <lights_fragment_maps>',
+          '{',
+          '  vec2 ruv = vReflUv.xy / vReflUv.w + normal.xy * 0.012;',
+          '  vec2 edge = smoothstep(0.0, 0.06, ruv) * smoothstep(0.0, 0.06, 1.0 - ruv);',
+          '  float lod = clamp(material.clearcoatRoughness * 14.0, 0.0, 5.0);',
+          '  vec3 refl = textureLod(tReflect, ruv, lod).rgb;',
+          '  clearcoatRadiance = mix(clearcoatRadiance, refl, uReflect * edge.x * edge.y);',
+          '}'
+        ].join('\n'));
+      };
+      M.customProgramCacheKey = function () { return 'marble-planar'; };
+      M.needsUpdate = true;
+
+      function render(renderer, _scene, camera) {
+        // di VR (WebXR) refleksi planar dimatikan; lantai kembali memakai IBL clearcoat
+        var xr = renderer.xr.isPresenting;
+        uniforms.uReflect.value = xr ? 0 : 1;
+        if (!dirty || xr || !camera.isPerspectiveCamera) return;
+        dirty = false;
+        renderer.getDrawingBufferSize(size);
+        var w = Math.max(4, Math.round(size.x * Q.reflect)), h = Math.max(4, Math.round(size.y * Q.reflect));
+        if (rt.width !== w || rt.height !== h) rt.setSize(w, h);
+
+        // kamera cermin terhadap bidang y = 0 (sama seperti Reflector three.js)
+        camPos.setFromMatrixPosition(camera.matrixWorld);
+        if (camPos.y < 0.05) return;
+        planePt.set(camPos.x, 0, camPos.z);
+        rot.extractRotation(camera.matrixWorld);
+        lookAt.set(0, 0, -1).applyMatrix4(rot).add(camPos);
+        view.subVectors(planePt, camPos).reflect(normal).negate().add(planePt);
+        target.subVectors(planePt, lookAt).reflect(normal).negate().add(planePt);
+        mirror.position.copy(view);
+        mirror.up.set(0, 1, 0).applyMatrix4(rot).reflect(normal);
+        mirror.lookAt(target);
+        mirror.near = camera.near; mirror.far = camera.far;
+        mirror.updateMatrixWorld();
+        mirror.projectionMatrix.copy(camera.projectionMatrix);
+        mirror.projectionMatrixInverse.copy(camera.projectionMatrixInverse);
+        uniforms.uReflectMatrix.value.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1)
+          .multiply(mirror.projectionMatrix).multiply(mirror.matrixWorldInverse);
+
+        // near plane miring: potong semua yang ada di bawah lantai
+        plane.setFromNormalAndCoplanarPoint(normal, planePt).applyMatrix4(mirror.matrixWorldInverse);
+        clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+        var pm = mirror.projectionMatrix.elements;
+        q.x = (Math.sign(clip.x) + pm[8]) / pm[0];
+        q.y = (Math.sign(clip.y) + pm[9]) / pm[5];
+        q.z = -1; q.w = (1 + pm[10]) / pm[14];
+        clip.multiplyScalar(2 / clip.dot(q));
+        pm[2] = clip.x; pm[6] = clip.y; pm[10] = clip.z + 1 - 0.003; pm[14] = clip.w;
+
+        var prevTarget = renderer.getRenderTarget(), prevXr = renderer.xr.enabled, prevShadow = renderer.shadowMap.autoUpdate;
+        floorMeshes.forEach(function (m) { m.visible = false; });
+        var ret = W.reticle && W.reticle.group, retVisible = ret && ret.visible;
+        if (ret) ret.visible = false;
+        renderer.xr.enabled = false; renderer.shadowMap.autoUpdate = false;
+        renderer.setRenderTarget(rt);
+        renderer.state.buffers.depth.setMask(true);
+        if (renderer.autoClear === false) renderer.clear();
+        renderer.render(scene, mirror);
+        renderer.xr.enabled = prevXr; renderer.shadowMap.autoUpdate = prevShadow;
+        renderer.setRenderTarget(prevTarget);
+        floorMeshes.forEach(function (m) { m.visible = true; });
+        if (ret) ret.visible = retVisible;
+      }
+      floorMeshes[0].onBeforeRender = render;
+      W.ticks.push(function () { dirty = true; });
+      W.reflection = { target: rt, uniforms: uniforms };
+    }
+
+    // Saat post-processing aktif, tone mapping ACES pindah ke OutputPass dan ikut mengenai
+    // material "menyala" (toneMapped: false) → neon jadi pucat. Warna targetnya dibalik
+    // lewat invers ACES di shader: setelah OutputPass hasilnya kembali persis warna aslinya,
+    // sementara nilainya di buffer HDR cukup tinggi untuk memicu bloom.
+    function acesInverseUniforms() {
+      function colsToMat(a, b, c) { return new T.Matrix3().set(a[0], b[0], c[0], a[1], b[1], c[1], a[2], b[2], c[2]); }
+      return {
+        uHdrOn: { value: 1 },
+        uHdrExposure: { value: renderer.toneMappingExposure },
+        uAcesInInv: { value: colsToMat([0.59719, 0.07600, 0.02840], [0.35458, 0.90834, 0.13383], [0.04823, 0.01566, 0.83777]).invert() },
+        uAcesOutInv: { value: colsToMat([1.60475, -0.10208, -0.00327], [-0.53108, 1.10813, -0.07276], [-0.07367, -0.00605, 1.07602]).invert() }
+      };
+    }
+    var INV_ACES_GLSL = [
+      'uniform float uHdrOn; uniform float uHdrExposure; uniform mat3 uAcesInInv; uniform mat3 uAcesOutInv;',
+      'vec3 invAces(vec3 y, float peak) {',
+      '  y = uAcesOutInv * clamp(y, 0.0, peak);',
+      '  vec3 A = 1.0 - 0.983729 * y, B = 0.0245786 - 0.432951 * y, C = -0.000090537 - 0.238081 * y;',
+      '  vec3 v = (-B + sqrt(max(B * B - 4.0 * A * C, 0.0))) / (2.0 * A);',
+      '  return max(uAcesInInv * v, 0.0) * 0.6 / uHdrExposure;',
+      '}'
+    ].join('\n');
+    function hdrEmissive(peakPlain, peakMapped, peakGlow) {
+      W.hdrU = acesInverseUniforms();
+      var seen = [];
+      scene.traverse(function (o) {
+        var m = o.material;
+        if (!m || Array.isArray(m) || m.toneMapped !== false || seen.indexOf(m) >= 0) return;
+        if (!(m.isMeshBasicMaterial || m.isSpriteMaterial)) return;
+        seen.push(m);
+        // LED polos boleh mendekati putih penuh (bloom kuat); signage bergambar dibatasi supaya teks tidak "meleleh"
+        var peak = (m.blending === T.AdditiveBlending ? peakGlow : m.map ? peakMapped : peakPlain).toFixed(3);
+        var prev = m.onBeforeCompile;
+        m.onBeforeCompile = function (sh, r) {
+          if (prev) prev.call(this, sh, r);
+          Object.assign(sh.uniforms, W.hdrU);
+          sh.fragmentShader = INV_ACES_GLSL + '\n' + sh.fragmentShader.replace('#include <opaque_fragment>',
+            'if (uHdrOn > 0.5) outgoingLight = invAces(outgoingLight, ' + peak + ');\n#include <opaque_fragment>');
+        };
+        m.customProgramCacheKey = function () { return 'invaces' + peak; };
+        m.needsUpdate = true;
+      });
+      return seen.length;
+    }
+
     function refreshDynamic() {
       if (W.banner) W.banner.redraw();
       if (W.directory) W.directory.redraw();
@@ -2069,6 +2274,14 @@
         if (instant) applyTOD(W.tod.target);
       },
       timeOfDay: function () { return W.tod.target === 1 ? 'night' : 'day'; },
+      // dipanggil mall.html setelah MallPost.attach(); post boleh null (tier low / gagal)
+      attachPost: function (post) {
+        W.post = post || null;
+        if (!post) return;
+        hdrEmissive(0.985, 0.93, 0.8);
+        var k = W.tod.k;
+        post.setNight(k * k * (3 - 2 * k));
+      },
       features: W.features,
       updateUnit: function (u) { updateUnit(u); refreshDynamic(); },
       refreshTexts: function () { W.i18n.forEach(function (s) { s.redraw(); }); refreshDynamic(); },
@@ -2084,6 +2297,7 @@
         hide: function () { if (W.reticle) W.reticle.group.visible = false; },
         ping: function (x, z) { var r = W.reticle; if (!r) return; r.pingPos.set(x, 0, z); r.pingT = 0; }
       },
+      reflection: function () { return W.reflection || null; },
       stats: function () {
         var calls = renderer.info.render.calls, tris = renderer.info.render.triangles;
         return { calls: calls, triangles: tris, quality: Q.name, pixelRatio: renderer.getPixelRatio() };
@@ -2100,6 +2314,8 @@
             var k = W.tod.k + Math.sign(W.tod.target - W.tod.k) * dt / 1.6;
             applyTOD(W.tod.target > W.tod.k ? Math.min(k, W.tod.target) : Math.max(k, W.tod.target));
           }
+          // tanpa composer (VR / post dimatikan) warna emisif tidak perlu dibalik dari ACES
+          if (W.hdrU) W.hdrU.uHdrOn.value = W.post && W.post.isActive() ? 1 : 0;
           for (var i = 0; i < W.ticks.length; i++) W.ticks[i](t, dt);
           animatePins(t);
         }
@@ -2107,6 +2323,7 @@
     }
 
     var root = ctx.unitsRoot;
+    sceneEl.mallWorld = api;      // pegangan untuk debugging dari konsole
     return Promise.resolve()
       .then(step('lighting', 0.08, function () { setupRenderer(); setupLighting(); }))
       .then(step('materials', 0.2, setupMaterials))
@@ -2122,6 +2339,7 @@
       }))
       .then(step('finish', 0.95, function () {
         W.B.flush(W.root, Q.shadows);
+        buildFloorReflection();
         applyTOD(ctx.timeOfDay === 'night' ? 1 : 0);
         W.tod.target = W.tod.k;
         refreshDynamic();

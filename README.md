@@ -47,14 +47,32 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
 - **Signage kanvas** untuk semua teks 3D (tajam, ikut ganti bahasa, tidak butuh font CDN A-Frame)
 - **Hidup**: tetesan air mancur, anak tangga eskalator bergerak, spanduk bergoyang, produk berputar,
   pin hotspot melayang
+- **Material PBR berlapis** (tier medium/high, `MeshPhysicalMaterial`): marmer lantai dengan
+  urat *domain-warped* dua skala, dasar *honed* + lapisan **clearcoat** poles yang kilapnya
+  dipecah peta noda/bekas pel (juga memecah pola ubin yang berulang); granit & terrazzo poles
+  (terrazzo kini punya normal & roughness map dari serpih batunya), kayu berpernis, cat piano
+  hitam, beton sealed, dan kain jok dengan **sheen**
+- **Refleksi planar lantai** (tier high): koridor dirender ulang dari kamera cermin di
+  setengah resolusi lalu disisipkan ke lapisan clearcoat marmer — Fresnel membuat pantulan
+  kolom, etalase, dan lampu kuat di sudut miring; noda poles mengaburkannya lewat mipmap
+- **Post-processing sinematik** (`mall-post.js`, tier medium/high), buffer HDR half-float:
+
+  RenderPass (MSAA 4× di high) → **GTAO** (ambient occlusion + denoise Poisson) → **Bloom**
+  → OutputPass (ACES + sRGB) → FXAA (medium) → **Grade**: kurva S filmic, split toning
+  (bayangan teal, highlight hangat), vignette, aberasi kromatik halus di tepi, film grain
+
+  Nilai grade & bloom ikut transisi siang↔malam (malam: kontras & bloom lebih kuat). Material
+  menyala (LED, signage, lampu) dibalik dari kurva ACES di shader, sehingga warnanya tetap
+  persis setelah tone mapping tetapi cukup "HDR" untuk memicu bloom. Kabut eksponensial tipis
+  memberi perspektif udara di koridor 68 m. Di mode VR pipeline ini otomatis dilewati.
 - **Performa**: semua geometri statis digabung per material (±60–220 draw call tergantung
   sudut pandang), bayangan kontak murah di bawah objek, dan tiga tier kualitas:
 
   | Tier | Dipakai otomatis untuk | Beda utama |
   | --- | --- | --- |
-  | Low | perangkat memori kecil | pixel ratio 1, tanpa bayangan, light shaft & semburan air |
-  | Medium | tablet & HP | pixel ratio ≤ 1,5, bayangan matahari/bulan 2K |
-  | High | desktop | pixel ratio ≤ 2, bayangan 4K bertepi lembut, tekstur lantai 2K |
+  | Low | perangkat memori kecil | pixel ratio 1, tanpa bayangan, light shaft, semburan air, clearcoat & post-processing |
+  | Medium | tablet & HP | pixel ratio ≤ 1,5, bayangan 2K, clearcoat, GTAO ½ resolusi, bloom, FXAA, grade |
+  | High | desktop | pixel ratio ≤ 2, bayangan 4K lembut, tekstur lantai 2K, refleksi planar, MSAA 4×, GTAO ¾ resolusi |
 
   Bayangan matahari/bulan dirender ke shadow map **statis**: dihitung sekali saat memuat dan
   saat siang/malam berganti, bukan tiap frame — itu yang membuatnya muat di tablet.
@@ -169,6 +187,8 @@ Pengecualian dan penyetelan (lihat blok `env` di file workflow):
 index.html                     showroom VR Porsche
 mall.html                      data, UI, leasing, product showcase, navigasi
 mall-world.js                  renderer 3D: material, pencahayaan, arsitektur, toko, FX
+mall-post.js                   post-processing (ES module): GTAO, bloom, grading sinematik
+vendor/three/                  pass post-processing three.js (MIT) + shim ke THREE milik A-Frame
 assets/Porsche 356B.glb        model showroom (dipakai juga oleh unit A4)
 assets/products/*.glb          model produk tenant (web + AR Android)
 assets/products/*.usdz         versi AR Quick Look untuk iPhone/iPad
