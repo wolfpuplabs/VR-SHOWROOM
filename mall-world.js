@@ -2279,8 +2279,8 @@
         W.post = post || null;
         if (!post) return;
         // puncak rendah = glow halus; signage di bawah ambang bloom supaya teks tetap tajam
-        W.mat.panel.userData.hdrPeak = 0.88;
-        hdrEmissive(0.96, 0.86, 0.7);
+        W.mat.panel.userData.hdrPeak = 0.9;
+        hdrEmissive(0.965, 0.86, 0.74);
         var k = W.tod.k;
         post.setNight(k * k * (3 - 2 * k));
       },
