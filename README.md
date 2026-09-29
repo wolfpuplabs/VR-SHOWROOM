@@ -27,8 +27,14 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
 **Visual & rendering (`mall-world.js`)**
 
 - **Pencahayaan**: lampu fisik + tone mapping ACES, image-based lighting dari environment map
-  yang dirender saat mulai (refleksi nyata di marmer, kaca, dan logam), matahari lewat
-  skylight dengan light shaft, lampu koridor hangat, dan cove LED di bawah mezanin
+  yang dirender saat mulai (refleksi nyata di marmer, kaca, dan logam), lampu koridor hangat,
+  dan cove LED di bawah mezanin. Matahari hanya masuk lewat skylight: atap memproyeksikan
+  bayangan sehingga rangka baja skylight menggambar pola garis di lantai, kolom, dan dinding
+- **Siang & malam**: tombol ☀/☾ di header, atau **?** → Lighting (Auto / Day / Night).
+  *Auto* mengikuti jam perangkat (siang 06.00–18.00). Malam memakai environment map sendiri,
+  cahaya bulan dingin yang tetap membentuk pola skylight, langit berbintang dengan bulan,
+  lampu interior lebih hangat, light shaft padam, dan lampu taman di plaza menyala.
+  Pergantian dianimasikan ±1,6 detik
 - **Material PBR prosedural**: marmer berurat dengan nat, granit, kayu oak, terrazzo, beton
   poles, plester, dan logam brushed — lengkap dengan roughness map dan normal map yang
   dibuat di kanvas saat loading. Tidak ada berkas tekstur yang diunduh
@@ -46,9 +52,12 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
 
   | Tier | Dipakai otomatis untuk | Beda utama |
   | --- | --- | --- |
-  | Low | perangkat memori kecil | pixel ratio 1, tanpa light shaft & semburan air |
-  | Medium | tablet & HP | pixel ratio ≤ 1,5, tanpa shadow map real-time |
-  | High | desktop | pixel ratio ≤ 2, bayangan matahari real-time, tekstur lantai 2K |
+  | Low | perangkat memori kecil | pixel ratio 1, tanpa bayangan, light shaft & semburan air |
+  | Medium | tablet & HP | pixel ratio ≤ 1,5, bayangan matahari/bulan 2K |
+  | High | desktop | pixel ratio ≤ 2, bayangan 4K bertepi lembut, tekstur lantai 2K |
+
+  Bayangan matahari/bulan dirender ke shadow map **statis**: dihitung sekali saat memuat dan
+  saat siang/malam berganti, bukan tiap frame — itu yang membuatnya muat di tablet.
 
   Tier bisa dipaksa dari panel bantuan (**?** → Graphics); halaman dimuat ulang untuk menerapkannya.
 

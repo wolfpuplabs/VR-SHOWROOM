@@ -16,9 +16,11 @@
 
   /* ============================ kualitas grafis ============================ */
   var PRESETS = {
-    low:    { name: 'low',    pixelRatio: 1,   tex: 512,  floorTex: 1024, shadows: false, points: 1, flora: 0.5, shafts: false, jets: false, aniso: 2 },
-    medium: { name: 'medium', pixelRatio: 1.5, tex: 512,  floorTex: 1024, shadows: false, points: 2, flora: 1,   shafts: true,  jets: true,  aniso: 4 },
-    high:   { name: 'high',   pixelRatio: 2,   tex: 1024, floorTex: 2048, shadows: true,  points: 4, flora: 1,   shafts: true,  jets: true,  aniso: 8 }
+    // bayangan matahari/bulan dirender sekali ke shadow map statis (hanya dihitung ulang
+    // saat siang↔malam berganti), jadi cukup murah untuk tablet
+    low:    { name: 'low',    pixelRatio: 1,   tex: 512,  floorTex: 1024, shadows: false, shadowSize: 0,    softShadows: false, points: 1, flora: 0.5, shafts: false, jets: false, aniso: 2 },
+    medium: { name: 'medium', pixelRatio: 1.5, tex: 512,  floorTex: 1024, shadows: true,  shadowSize: 2048, softShadows: false, points: 2, flora: 1,   shafts: true,  jets: true,  aniso: 4 },
+    high:   { name: 'high',   pixelRatio: 2,   tex: 1024, floorTex: 2048, shadows: true,  shadowSize: 4096, softShadows: true,  points: 4, flora: 1,   shafts: true,  jets: true,  aniso: 8 }
   };
 
   function detectQuality(pref) {
@@ -168,12 +170,12 @@
       var vein = Math.abs(Math.sin((u * 1.3 + v * 0.7 + tile * 0.21) * 9 + warp * 7.5));
       vein = Math.pow(1 - vein, 14) * 0.85 + Math.pow(1 - vein, 60) * 0.5;
       var cloud = N2.fbm(u, v, 3, 4);
-      var base = 222 + (cloud - 0.5) * 16 + (tile % 2 ? 3 : -2);
+      var base = 198 + (cloud - 0.5) * 18 + (tile % 2 ? 3 : -2);
       var r = base - vein * 70, g = base - 4 - vein * 72, b = base - 12 - vein * 70;
       if (grout) { r = 150; g = 146; b = 140; }
       o.r = r; o.g = g; o.b = b;
       o.h = grout ? 0 : 0.6 + cloud * 0.08;
-      o.rough = grout ? 0.85 : 0.08 + cloud * 0.08 + vein * 0.05;
+      o.rough = grout ? 0.85 : 0.2 + cloud * 0.1 + vein * 0.05;
     }, 3);
   };
 
@@ -383,7 +385,7 @@
     var marble = tf.marble(), granite = tf.granite(), wood = tf.wood(), terr = tf.terrazzo(),
         conc = tf.concrete(), plas = tf.plaster(), brushed = tf.brushed();
 
-    this.marble   = withTex(marble,  { roughness: 1, metalness: 0, envMapIntensity: 1.1, ns: 0.35 });
+    this.marble   = withTex(marble,  { roughness: 1, metalness: 0, envMapIntensity: 0.8, ns: 0.35 });
     this.granite  = withTex(granite, { roughness: 1, metalness: 0, envMapIntensity: 1.0, ns: 0.4 });
     this.wood     = withTex(wood,    { roughness: 1, metalness: 0, ns: 0.5 });
     this.woodDark = withTex(wood,    { roughness: 1, metalness: 0, color: 0x6b4b33, ns: 0.5 });
@@ -427,8 +429,11 @@
 
     // penanda siapa yang boleh memproyeksikan bayangan real-time (tier high)
     [this.metalDark, this.metalSteel, this.wood, this.woodDark, this.planter, this.stoneLight, this.fascia,
-     this.blackGloss, this.bark, this.frond, this.foliage, this.cushion, this.brass].forEach(function (m) { m.userData.cast = true; });
-    [this.marble, this.granite, this.wood, this.terrazzo, this.concrete, this.plaster, this.stoneLight].forEach(function (m) { m.userData.receive = true; });
+     this.blackGloss, this.bark, this.frond, this.foliage, this.cushion, this.brass, this.plaster, this.ceiling,
+     this.rubber].forEach(function (m) { m.userData.cast = true; });
+    [this.marble, this.granite, this.wood, this.terrazzo, this.concrete, this.plaster, this.stoneLight, this.fascia,
+     this.ceiling, this.blackGloss, this.planter, this.metalDark, this.metalSteel, this.woodDark, this.brass,
+     this.cushion].forEach(function (m) { m.userData.receive = true; });
 
     this.statusCache = {};
   }
@@ -437,7 +442,7 @@
     var key = hex + '|' + (rough || 0.7);
     if (!this.paints[key]) {
       var m = new T.MeshStandardMaterial({ color: hex, roughness: rough || 0.7, metalness: 0 });
-      m.userData.receive = true;
+      m.userData.receive = true; m.userData.cast = true;
       this.paints[key] = m;
     }
     return this.paints[key];
@@ -450,10 +455,12 @@
   /* ===================== image-based lighting & langit ===================== */
   // "ruangan studio" kecil yang dirender ke PMREM → refleksi realistis di marmer,
   // kaca, dan logam tanpa satu pun berkas HDR yang perlu diunduh
-  function buildEnvironment(renderer) {
+  // night=true → langit gelap di skylight, cahaya toko & downlight hangat jadi dominan
+  function buildEnvironment(renderer, night) {
     var scene = new T.Scene();
     var box = new T.BoxGeometry(1, 1, 1);
-    var room = new T.Mesh(box, new T.MeshBasicMaterial({ side: T.BackSide, color: new T.Color(0.30, 0.285, 0.265) }));
+    var base = night ? new T.Color(0.035, 0.034, 0.04) : new T.Color(0.17, 0.163, 0.152);
+    var room = new T.Mesh(box, new T.MeshBasicMaterial({ side: T.BackSide, color: base }));
     room.scale.set(40, 14, 80); room.position.y = 7;
     scene.add(room);
     function emit(hex, k, x, y, z, sx, sy, sz) {
@@ -463,27 +470,34 @@
       e.position.set(x, y, z); e.scale.set(sx, sy, sz);
       scene.add(e);
     }
-    emit(0xdfe9ff, 7, 0, 13.8, 0, 9, 0.2, 70);                 // skylight panjang
-    emit(0xfff3e0, 14, 6, 13.7, -4, 3, 0.2, 5);                // "matahari" terpantul
-    for (var z = -30; z <= 30; z += 10) {
-      emit(0xffd6a3, 2.6, -19.8, 3, z, 0.2, 3, 7);             // cahaya toko kiri
-      emit(0xffd6a3, 2.6, 19.8, 3, z, 0.2, 3, 7);              // cahaya toko kanan
-      emit(0xfff0dc, 5, -6, 5.1, z, 1.2, 0.1, 1.2);            // downlight mezanin
-      emit(0xfff0dc, 5, 6, 5.1, z, 1.2, 0.1, 1.2);
+    if (night) {
+      emit(0x2a3d6e, 0.5, 0, 13.8, 0, 9, 0.2, 70);              // skylight: langit malam
+    } else {
+      emit(0xdfe9ff, 3.6, 0, 13.8, 0, 9, 0.2, 70);               // skylight panjang
+      emit(0xfff3e0, 16, 4, 13.7, -4, 2.5, 0.2, 4);              // "matahari" terpantul (sorot spekular)
     }
-    emit(0x6f6558, 1, 0, 0.05, 0, 40, 0.1, 80);                 // pantulan lantai
+    for (var z = -30; z <= 30; z += 10) {
+      emit(0xffcf96, night ? 2.2 : 2.0, -19.8, 3, z, 0.2, 3, 7); // cahaya toko kiri
+      emit(0xffcf96, night ? 2.2 : 2.0, 19.8, 3, z, 0.2, 3, 7);  // cahaya toko kanan
+      emit(0xffe6c4, night ? 4.5 : 5, -6, 5.1, z, 1.2, 0.1, 1.2); // downlight mezanin
+      emit(0xffe6c4, night ? 4.5 : 5, 6, 5.1, z, 1.2, 0.1, 1.2);
+    }
+    emit(night ? 0x17140f : 0x5a5248, 1, 0, 0.05, 0, 40, 0.1, 80); // pantulan lantai
     var pmrem = new T.PMREMGenerator(renderer);
     var rt = pmrem.fromScene(scene, 0.03);
     pmrem.dispose();
     return rt.texture;
   }
 
-  function buildSky(sunDir) {
+  function buildSky(sunDir, moonDir) {
     var mat = new T.ShaderMaterial({
       side: T.BackSide, depthWrite: false,
       uniforms: {
-        uTop: { value: new T.Color(0x3f78c8) }, uHorizon: { value: new T.Color(0xcfe2f2) },
-        uGround: { value: new T.Color(0x9a9186) }, uSun: { value: sunDir.clone().normalize() }
+        uTopDay: { value: new T.Color(0x3a73c4) }, uHorDay: { value: new T.Color(0xd3e4f2) },
+        uTopNight: { value: new T.Color(0x040814) }, uHorNight: { value: new T.Color(0x16223d) },
+        uGround: { value: new T.Color(0x9a9186) },
+        uSun: { value: sunDir.clone().normalize() }, uMoon: { value: moonDir.clone().normalize() },
+        uNight: { value: 0 }
       },
       vertexShader: [
         'varying vec3 vDir;',
@@ -493,13 +507,21 @@
         '  gl_Position = p.xyww;',
         '}'].join('\n'),
       fragmentShader: [
-        'uniform vec3 uTop; uniform vec3 uHorizon; uniform vec3 uGround; uniform vec3 uSun;',
+        'uniform vec3 uTopDay; uniform vec3 uHorDay; uniform vec3 uTopNight; uniform vec3 uHorNight; uniform vec3 uGround;',
+        'uniform vec3 uSun; uniform vec3 uMoon; uniform float uNight;',
         'varying vec3 vDir;',
+        'float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }',
         'void main(){',
         '  vec3 d = normalize(vDir); float h = d.y;',
-        '  vec3 col = h > 0.0 ? mix(uHorizon, uTop, pow(h, 0.55)) : mix(uHorizon, uGround, pow(-h, 0.35));',
+        '  vec3 top = mix(uTopDay, uTopNight, uNight), hor = mix(uHorDay, uHorNight, uNight);',
+        '  vec3 col = h > 0.0 ? mix(hor, top, pow(h, 0.55)) : mix(hor, uGround * (1.0 - 0.9 * uNight), pow(-h, 0.35));',
         '  float s = max(dot(d, normalize(uSun)), 0.0);',
-        '  col += vec3(1.0, 0.92, 0.75) * (pow(s, 900.0) * 6.0 + pow(s, 12.0) * 0.22);',
+        '  col += (1.0 - uNight) * vec3(1.0, 0.92, 0.75) * (pow(s, 900.0) * 6.0 + pow(s, 12.0) * 0.22);',
+        '  float m = max(dot(d, normalize(uMoon)), 0.0);',
+        '  col += uNight * (vec3(0.9, 0.93, 1.0) * smoothstep(0.99935, 0.9996, m) * 1.8 + vec3(0.25, 0.35, 0.6) * pow(m, 60.0) * 0.35);',
+        '  vec3 g = floor(d * 280.0);',
+        '  float star = step(0.9972, hash(g)) * smoothstep(0.02, 0.3, h) * (0.5 + 0.5 * hash(g + 7.3));',
+        '  col += uNight * star * vec3(0.92, 0.95, 1.0);',
         '  gl_FragColor = vec4(col, 1.0);',
         '  #include <tonemapping_fragment>',
         '  #include <colorspace_fragment>',
@@ -741,45 +763,113 @@
       renderer.outputColorSpace = T.SRGBColorSpace;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.pixelRatio));
       renderer.shadowMap.enabled = Q.shadows;
-      renderer.shadowMap.type = T.PCFSoftShadowMap;
+      renderer.shadowMap.type = Q.softShadows ? T.PCFSoftShadowMap : T.PCFShadowMap;
       renderer.shadowMap.autoUpdate = false;      // semua objek bayangan statis → cukup sekali
       W.tf = new TextureFactory(renderer, Q);
     }
 
+    // Dua keadaan pencahayaan; transisi siang↔malam me-lerp semua nilai ini.
+    var TOD = {
+      day: {
+        dir: new T.Vector3(0.24, 1, 0.3).normalize(), color: new T.Color(0xfff0d8),
+        sun: Q.shadows ? 12 : 1.4, hemiSky: new T.Color(0xeaf2ff), hemiGround: new T.Color(0x74644f), hemi: Q.shadows ? 0.22 : 0.45,
+        point: 30, exposure: Q.shadows ? 0.9 : 1.0
+      },
+      night: {
+        dir: new T.Vector3(-0.32, 0.9, -0.3).normalize(), color: new T.Color(0x9fb6ff),
+        sun: Q.shadows ? 0.6 : 0.2, hemiSky: new T.Color(0x1b2442), hemiGround: new T.Color(0x0d0c0b), hemi: 0.05,
+        point: 55, exposure: 0.78
+      }
+    };
+
     function setupLighting() {
-      W.env = buildEnvironment(renderer);
-      scene.environment = W.env;
-      var sunDir = new T.Vector3(0.42, 1, 0.55).normalize();
-      W.sky = buildSky(sunDir);
+      W.envDay = buildEnvironment(renderer, false);
+      W.envNight = buildEnvironment(renderer, true);
+      scene.environment = W.envDay;
+      W.sunDir = TOD.day.dir.clone();
+      W.sky = buildSky(TOD.day.dir, TOD.night.dir);
       scene.add(W.sky);
 
-      var hemi = new T.HemisphereLight(0xeaf2ff, 0x74644f, 0.55);
-      W.root.add(hemi);
+      W.hemi = new T.HemisphereLight(0xeaf2ff, 0x74644f, TOD.day.hemi);
+      W.root.add(W.hemi);
 
-      var sun = new T.DirectionalLight(0xfff1dc, Q.shadows ? 3.2 : 1.1);
-      sun.position.copy(sunDir).multiplyScalar(40);
-      sun.target.position.set(0, 0, 0);
+      // satu directional light berperan sebagai matahari (siang) atau bulan (malam)
+      var sun = new T.DirectionalLight(TOD.day.color, TOD.day.sun);
+      sun.target.position.set(0, 0, -2);
       if (Q.shadows) {
         sun.castShadow = true;
-        sun.shadow.mapSize.set(2048, 2048);
-        var sc = sun.shadow.camera;
-        sc.left = -34; sc.right = 34; sc.top = 34; sc.bottom = -34; sc.near = 5; sc.far = 90;
-        sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+        sun.shadow.mapSize.set(Q.shadowSize, Q.shadowSize);
+        sun.shadow.bias = -0.00025;
+        sun.shadow.normalBias = Q.shadowSize >= 4096 ? 0.02 : 0.035;
+        sun.shadow.radius = 2;
       }
       W.root.add(sun); W.root.add(sun.target);
-      W.sun = sun; W.sunDir = sunDir;
+      W.sun = sun;
 
       // lampu hangat di sepanjang koridor (jumlah mengikuti tier kualitas)
       var zs = Q.points >= 4 ? [22, 6, -10, -26] : Q.points >= 2 ? [14, -14] : [0];
-      zs.forEach(function (z) {
-        var p = new T.PointLight(0xffe2bd, 38, 22, 2);
+      W.points = zs.map(function (z) {
+        var p = new T.PointLight(0xffe2bd, TOD.day.point, 22, 2);
         p.position.set(0, 4.4, z);
         W.root.add(p);
+        return p;
       });
+      W.tod = { k: 0, target: 0 };
+    }
+
+    // kamera bayangan dipas ke kotak gedung dilihat dari arah cahaya → resolusi tidak terbuang
+    var shadowFitCam = new T.OrthographicCamera();
+    function fitShadow() {
+      if (!Q.shadows) return;
+      var sun = W.sun, sc = sun.shadow.camera;
+      sun.updateMatrixWorld(); sun.target.updateMatrixWorld();
+      shadowFitCam.position.copy(sun.position);
+      shadowFitCam.lookAt(sun.target.position);
+      shadowFitCam.updateMatrixWorld();
+      var inv = shadowFitCam.matrixWorldInverse, v = new T.Vector3();
+      var mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+      [MALL.minX, MALL.maxX].forEach(function (x) {
+        [0, LV.sky + 0.6].forEach(function (y) {
+          [MALL.minZ - 1, MALL.maxZ + 1].forEach(function (z) {
+            v.set(x, y, z).applyMatrix4(inv);
+            mn[0] = Math.min(mn[0], v.x); mn[1] = Math.min(mn[1], v.y); mn[2] = Math.min(mn[2], v.z);
+            mx[0] = Math.max(mx[0], v.x); mx[1] = Math.max(mx[1], v.y); mx[2] = Math.max(mx[2], v.z);
+          });
+        });
+      });
+      sc.left = mn[0]; sc.right = mx[0]; sc.bottom = mn[1]; sc.top = mx[1];
+      sc.near = Math.max(0.5, -mx[2] - 1); sc.far = -mn[2] + 1;
+      sc.updateProjectionMatrix();
+      renderer.shadowMap.needsUpdate = true;
+    }
+
+    // k: 0 = siang penuh, 1 = malam penuh
+    var tmpDir = new T.Vector3();
+    function applyTOD(k) {
+      var D = TOD.day, N = TOD.night, e = k * k * (3 - 2 * k);
+      W.tod.k = k;
+      // arah cahaya: pakai arah matahari selama masih "siang", lalu arah bulan
+      tmpDir.copy(e < 0.5 ? D.dir : N.dir);
+      W.sun.position.copy(tmpDir).multiplyScalar(60).add(W.sun.target.position);
+      // redup ke 0 di tengah transisi supaya pergantian arah bayangan tidak terlihat meloncat
+      var fadeMid = Math.abs(e - 0.5) * 2;
+      W.sun.color.copy(e < 0.5 ? D.color : N.color);
+      W.sun.intensity = (e < 0.5 ? D.sun : N.sun) * fadeMid;
+      W.hemi.color.copy(D.hemiSky).lerp(N.hemiSky, e);
+      W.hemi.groundColor.copy(D.hemiGround).lerp(N.hemiGround, e);
+      W.hemi.intensity = lerp(D.hemi, N.hemi, e);
+      W.points.forEach(function (p) { p.intensity = lerp(D.point, N.point, e); });
+      renderer.toneMappingExposure = lerp(D.exposure, N.exposure, e);
+      W.sky.material.uniforms.uNight.value = e;
+      scene.environment = e < 0.5 ? W.envDay : W.envNight;
+      if (W.shaftMat) W.shaftMat.uniforms.uStrength.value = 1 - e;
+      (W.lampGlows || []).forEach(function (g) { g.material.opacity = e * 0.95; });
+      (W.lampHeads || []).forEach(function (m) { m.color.setScalar(0.25 + e * 0.75); });
+      fitShadow();
     }
 
     function setupMaterials() {
-      W.mat = new MaterialLibrary(W.tf, Q, W.env);
+      W.mat = new MaterialLibrary(W.tf, Q, W.envDay);
       W.B = new Builder(ctx.colliders);          // satu builder → geometri statis digabung per material
     }
 
@@ -870,8 +960,8 @@
 
       // --- skylight: kaca + rangka baja + kuda-kuda di tiap garis kolom ---
       B.plane(M.glassSky, 0, LV.sky, cz, 9.8, len, { rx: Math.PI / 2 });
-      [-4.8, -2.4, 0, 2.4, 4.8].forEach(function (x) { B.box(M.metalSteel, x, LV.sky - 0.06, cz, 0.08, 0.12, len); });
-      for (var zr = L + 0.75; zr < R; zr += 1.5) B.box(M.metalSteel, 0, LV.sky - 0.05, zr, 9.8, 0.08, 0.06);
+      for (var xr = -4.8; xr <= 4.81; xr += 1.2) B.box(M.metalSteel, xr, LV.sky - 0.06, cz, 0.08, 0.12, len);
+      for (var zr = L + 0.4; zr < R; zr += 0.8) B.box(M.metalSteel, 0, LV.sky - 0.05, zr, 9.8, 0.07, 0.07);
       COL_Z.concat([28.5, -34.5]).forEach(function (z) {
         B.box(M.metalDark, 0, LV.sky - 0.3, z, 9.8, 0.12, 0.14);
         B.box(M.metalDark, 0, LV.roof + 0.15, z, 9.4, 0.1, 0.12);
@@ -1850,22 +1940,22 @@
       var dir = W.sunDir.clone().negate();
       var mat = new T.ShaderMaterial({
         transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
-        uniforms: { uTime: { value: 0 }, uColor: { value: new T.Color(1.0, 0.88, 0.66) } },
+        uniforms: { uTime: { value: 0 }, uStrength: { value: 1 }, uColor: { value: new T.Color(1.0, 0.88, 0.66) } },
         vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
         fragmentShader: [
-          'uniform float uTime; uniform vec3 uColor; varying vec2 vUv;',
+          'uniform float uTime; uniform float uStrength; uniform vec3 uColor; varying vec2 vUv;',
           'void main(){',
           '  float edge = smoothstep(0.0, 0.35, vUv.x) * smoothstep(1.0, 0.65, vUv.x);',
           '  float fade = smoothstep(0.0, 0.25, vUv.y) * smoothstep(1.0, 0.8, vUv.y) * (0.35 + vUv.y * 0.65);',
           '  float shimmer = 0.85 + 0.15 * sin(uTime * 0.7 + vUv.x * 9.0 + vUv.y * 3.0);',
-          '  gl_FragColor = vec4(uColor * edge * fade * shimmer * 0.075, 1.0);',
+          '  gl_FragColor = vec4(uColor * edge * fade * shimmer * 0.085 * uStrength, 1.0);',
           '}'].join('\n')
       });
+      W.shaftMat = mat;
       W.ticks.push(function (t) { mat.uniforms.uTime.value = t; });
       var len = LV.sky / -dir.y;
       var q = new T.Quaternion().setFromUnitVectors(new T.Vector3(0, -1, 0), dir);
-      var glowMat = new T.MeshBasicMaterial({ map: W.tf.glow(), color: 0xffe6bf, transparent: true, opacity: 0.16, depthWrite: false, blending: T.AdditiveBlending });
-      [[2.6, 14], [2.0, -1], [2.8, -16]].forEach(function (p) {
+      [[1.6, 14], [1.2, -1], [1.8, -16]].forEach(function (p) {
         var top = new T.Vector3(p[0], LV.sky, p[1]);
         var mid = top.clone().addScaledVector(dir, len / 2);
         for (var k = 0; k < 2; k++) {
@@ -1877,13 +1967,23 @@
           m.renderOrder = 3;
           W.root.add(m);
         }
-        // bercak matahari di lantai (menggantikan shadow map di tier medium)
-        if (!Q.shadows) {
-          var floorHit = top.clone().addScaledVector(dir, len);
-          var spot = new T.Mesh(new T.PlaneGeometry(3.4, 2.4), glowMat);
-          spot.rotation.x = -Math.PI / 2; spot.position.set(floorHit.x, 0.02, floorHit.z);
-          W.root.add(spot);
-        }
+      });
+    }
+
+    // ---------- lampu taman plaza luar: menyala saat malam ----------
+    function buildLamps() {
+      var M = W.mat, B = W.B.frame(0, 0, 0);
+      var glowMat = new T.SpriteMaterial({ map: W.tf.glow(), color: 0xffcf8a, transparent: true, opacity: 0,
+        depthWrite: false, blending: T.AdditiveBlending, toneMapped: false });
+      W.lampGlows = []; W.lampHeads = [];
+      [[-6.5, 35.5], [6.5, 35.5], [-13, 38], [13, 38], [-6.5, 46], [6.5, 46]].forEach(function (p) {
+        B.cyl(M.metalDark, p[0], 2.2, p[1], 0.05, 0.07, 4.4, { seg: 10 });
+        B.cyl(M.metalDark, p[0], 0.1, p[1], 0.2, 0.22, 0.2, { seg: 14 });
+        var headMat = new T.MeshBasicMaterial({ color: 0xffe2b0, toneMapped: false });
+        var head = new T.Mesh(new T.CylinderGeometry(0.16, 0.2, 0.34, 14), headMat);
+        head.position.set(p[0], 4.55, p[1]); W.root.add(head); W.lampHeads.push(headMat);
+        var g = new T.Sprite(glowMat.clone()); g.scale.set(3.2, 3.2, 1);
+        g.position.set(p[0], 4.55, p[1]); g.raycast = function () {}; W.root.add(g); W.lampGlows.push(g);
       });
     }
 
@@ -1963,6 +2063,12 @@
 
     var api = {
       quality: Q.name,
+      // mode: 'day' | 'night'; instant=true tanpa animasi (dipakai saat memuat)
+      setTimeOfDay: function (mode, instant) {
+        W.tod.target = mode === 'night' ? 1 : 0;
+        if (instant) applyTOD(W.tod.target);
+      },
+      timeOfDay: function () { return W.tod.target === 1 ? 'night' : 'day'; },
       features: W.features,
       updateUnit: function (u) { updateUnit(u); refreshDynamic(); },
       refreshTexts: function () { W.i18n.forEach(function (s) { s.redraw(); }); refreshDynamic(); },
@@ -1990,6 +2096,10 @@
         tick: function (time, delta) {
           var t = time / 1000, dt = Math.min((delta || 16) / 1000, 0.1);
           W.time = t;
+          if (W.tod && W.tod.k !== W.tod.target) {          // transisi siang↔malam ±1,6 detik
+            var k = W.tod.k + Math.sign(W.tod.target - W.tod.k) * dt / 1.6;
+            applyTOD(W.tod.target > W.tod.k ? Math.min(k, W.tod.target) : Math.max(k, W.tod.target));
+          }
           for (var i = 0; i < W.ticks.length; i++) W.ticks[i](t, dt);
           animatePins(t);
         }
@@ -2006,13 +2116,14 @@
         ctx.UNITS.forEach(updateUnit);
       }))
       .then(step('details', 0.8, function () {
-        buildFountain(); buildEscalators(); buildIslands(); buildSignage(); buildShafts(); buildReticle();
+        buildFountain(); buildEscalators(); buildIslands(); buildSignage(); buildShafts(); buildLamps(); buildReticle();
         api.floorEl = buildFloorHit(root);
         W.features.push({ type: 'circle', x: 0, z: 0, r: 2.75, label: '' });
       }))
       .then(step('finish', 0.95, function () {
         W.B.flush(W.root, Q.shadows);
-        if (Q.shadows) { renderer.shadowMap.autoUpdate = true; renderer.shadowMap.needsUpdate = true; }
+        applyTOD(ctx.timeOfDay === 'night' ? 1 : 0);
+        W.tod.target = W.tod.k;
         refreshDynamic();
         startLoop();
       }))
