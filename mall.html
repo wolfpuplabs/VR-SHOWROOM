@@ -139,6 +139,10 @@
   #fade{position:absolute;inset:0;z-index:45;background:#07090d;opacity:0;pointer-events:none;transition:opacity .22s ease}
   #fade.on{opacity:1}
   .quality{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--muted)}
+  .btn.icon{display:grid;place-items:center;padding:7px 10px}
+  #btn-tod .i-moon{display:none}
+  body.is-night #btn-tod .i-sun{display:none}
+  body.is-night #btn-tod .i-moon{display:block}
   .quality .seg button{padding:6px 10px}
 
   /* ---------- modal ---------- */
@@ -273,6 +277,10 @@
       <button data-lang="en" aria-pressed="true">EN</button>
       <button data-lang="id" aria-pressed="false">ID</button>
     </div>
+    <button class="btn ghost icon" id="btn-tod" data-i18n-title="tod.toggle" title="Day / Night">
+      <svg class="i-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>
+      <svg class="i-moon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>
+    </button>
     <button class="btn ghost" id="btn-list" data-i18n="btn.directory">Directory</button>
     <button class="btn ghost" id="btn-map" data-i18n="btn.map">Map</button>
     <button class="btn ghost" id="btn-help">?</button>
@@ -346,6 +354,14 @@
           <span><i style="background:#ff5d7a"></i><span data-i18n="legend.rented">Leased</span></span>
         </div>
         <div class="quality">
+          <span data-i18n="tod.label">Lighting</span>
+          <div class="seg" id="todseg">
+            <button data-tod="auto" aria-pressed="true" data-i18n="tod.auto">Auto</button>
+            <button data-tod="day" aria-pressed="false" data-i18n="tod.day">Day</button>
+            <button data-tod="night" aria-pressed="false" data-i18n="tod.night">Night</button>
+          </div>
+        </div>
+        <div class="quality">
           <span data-i18n="q.label">Graphics</span>
           <div class="seg" id="qseg">
             <button data-q="auto" aria-pressed="true" data-i18n="q.auto">Auto</button>
@@ -414,6 +430,7 @@
   var LS_WAIT   = 'wolfpup-mall-waitlist-v1';
   var LS_LANG   = 'wolfpup-mall-lang-v1';
   var LS_QUALITY = 'wolfpup-mall-quality-v1';
+  var LS_TOD     = 'wolfpup-mall-tod-v1';
 
   var STATUS = {
     available: { color: '#36d399' },
@@ -488,6 +505,8 @@
       'load.details': 'Adding the finishing touches…', 'load.finish': 'Almost there…', 'load.ready': 'Ready',
       'q.label': 'Graphics', 'q.auto': 'Auto', 'q.low': 'Low', 'q.medium': 'Medium', 'q.high': 'High',
       'q.active': 'running: {q}',
+      'tod.label': 'Lighting', 'tod.auto': 'Auto (clock)', 'tod.day': 'Day', 'tod.night': 'Night',
+      'tod.toggle': 'Switch day / night', 'toast.day': 'Daytime lighting', 'toast.night': 'Night lighting',
       'toast.teleport': 'Moved to the front of <b>{name}</b>',
       'toast.moved': 'Moved to {x}, {z}',
       'toast.booked': 'Rental request for <b>{name}</b> saved. Total {total} for {months} months.',
@@ -576,6 +595,8 @@
       'load.details': 'Menambahkan detail…', 'load.finish': 'Hampir selesai…', 'load.ready': 'Siap',
       'q.label': 'Grafis', 'q.auto': 'Otomatis', 'q.low': 'Rendah', 'q.medium': 'Sedang', 'q.high': 'Tinggi',
       'q.active': 'berjalan: {q}',
+      'tod.label': 'Pencahayaan', 'tod.auto': 'Otomatis (jam)', 'tod.day': 'Siang', 'tod.night': 'Malam',
+      'tod.toggle': 'Ganti siang / malam', 'toast.day': 'Pencahayaan siang', 'toast.night': 'Pencahayaan malam',
       'toast.teleport': 'Kamu dipindahkan ke depan <b>{name}</b>',
       'toast.moved': 'Berpindah ke titik {x}, {z}',
       'toast.booked': 'Pengajuan sewa <b>{name}</b> tersimpan. Total {total} untuk {months} bulan.',
@@ -908,6 +929,34 @@
     $('#sidebar').classList.remove('hidden');
   }
 
+  /* ---------------------------- siang / malam ----------------------------- */
+  function todPref() {
+    try { return localStorage.getItem(LS_TOD) || 'auto'; } catch (e) { return 'auto'; }
+  }
+  // 'auto' mengikuti jam perangkat: siang 06.00–18.00
+  function effectiveTod() {
+    var pref = todPref();
+    if (pref === 'day' || pref === 'night') return pref;
+    var h = new Date().getHours();
+    return h >= 6 && h < 18 ? 'day' : 'night';
+  }
+  function showTod() {
+    var pref = todPref(), mode = world ? world.timeOfDay() : effectiveTod();
+    document.body.classList.toggle('is-night', mode === 'night');
+    Array.prototype.forEach.call(document.querySelectorAll('#todseg button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-tod') === pref));
+    });
+  }
+  function setTod(pref, announce) {
+    try { localStorage.setItem(LS_TOD, pref); } catch (e) {}
+    var mode = effectiveTod();
+    if (world && world.timeOfDay() !== mode) {
+      world.setTimeOfDay(mode);
+      if (announce) toast(t(mode === 'night' ? 'toast.night' : 'toast.day'));
+    }
+    showTod();
+  }
+
   function qualityPref() {
     try { return localStorage.getItem(LS_QUALITY) || 'auto'; } catch (e) { return 'auto'; }
   }
@@ -918,6 +967,7 @@
       sceneEl: document.getElementById('scene'),
       unitsRoot: document.getElementById('mall-units'),
       quality: pref === 'auto' ? null : pref,
+      timeOfDay: effectiveTod(),
       MALL: MALL, FRONT_L: FRONT_L, FRONT_R: FRONT_R, DOOR_W: DOOR_W, Z_SLOTS: Z_SLOTS, ISLANDS: ISLANDS,
       UNITS: UNITS, PRODUCTS: PRODUCTS, colliders: COLLIDERS,
       statusOf: statusOf, unitName: unitName, t: t, L: L, shortRp: shortRp, rupiah: rupiah,
@@ -1503,6 +1553,9 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-placeholder]'), function (el) {
       el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
     });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-title]'), function (el) {
+      el.setAttribute('title', t(el.getAttribute('data-i18n-title')));
+    });
     Array.prototype.forEach.call(document.querySelectorAll('#langseg button'), function (el) {
       el.setAttribute('aria-pressed', String(el.getAttribute('data-lang') === lang));
     });
@@ -1806,6 +1859,7 @@
       label.textContent = t('load.' + key);
     })).then(function (w) {
       world = w;
+      showTod();
       initNavigation();
       showQuality();
       drawMap();
@@ -1828,6 +1882,17 @@
     var cam = document.getElementById('cam');
     if (cam) cam.setAttribute('mall-controls', '');
     loop();
+
+    $('#btn-tod').addEventListener('click', function () {
+      var mode = world ? world.timeOfDay() : effectiveTod();
+      setTod(mode === 'night' ? 'day' : 'night', true);
+    });
+    $('#todseg').addEventListener('click', function (e) {
+      var v = e.target.getAttribute && e.target.getAttribute('data-tod');
+      if (v) setTod(v, true);
+    });
+    setInterval(function () { if (todPref() === 'auto') setTod('auto', false); }, 5 * 60 * 1000);
+    showTod();
 
     $('#qseg').addEventListener('click', function (e) {
       var q = e.target.getAttribute && e.target.getAttribute('data-q');
