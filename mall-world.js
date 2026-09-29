@@ -2247,7 +2247,7 @@
         if (!(m.isMeshBasicMaterial || m.isSpriteMaterial)) return;
         seen.push(m);
         // LED polos boleh mendekati putih penuh (bloom kuat); signage bergambar dibatasi supaya teks tidak "meleleh"
-        var peak = (m.blending === T.AdditiveBlending ? peakGlow : m.map ? peakMapped : peakPlain).toFixed(3);
+        var peak = (m.userData.hdrPeak || (m.blending === T.AdditiveBlending ? peakGlow : m.map ? peakMapped : peakPlain)).toFixed(3);
         var prev = m.onBeforeCompile;
         m.onBeforeCompile = function (sh, r) {
           if (prev) prev.call(this, sh, r);
@@ -2278,7 +2278,9 @@
       attachPost: function (post) {
         W.post = post || null;
         if (!post) return;
-        hdrEmissive(0.985, 0.93, 0.8);
+        // puncak rendah = glow halus; signage di bawah ambang bloom supaya teks tetap tajam
+        W.mat.panel.userData.hdrPeak = 0.88;
+        hdrEmissive(0.96, 0.86, 0.7);
         var k = W.tod.k;
         post.setNight(k * k * (3 - 2 * k));
       },
