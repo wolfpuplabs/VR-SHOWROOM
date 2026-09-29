@@ -10,6 +10,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="mall-world.js"></script>
+<!-- modul contoh three.js (post-processing) memakai THREE milik A-Frame lewat shim -->
+<script type="importmap">{ "imports": { "three": "./vendor/three/three-shim.js" } }</script>
+<script type="module" src="mall-post.js"></script>
 <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 <style>
   :root{
@@ -387,6 +390,7 @@
          renderer="colorManagement: true; antialias: true; physicallyCorrectLights: true; toneMapping: ACESFilmic; exposure: 1; maxCanvasWidth: 2560; maxCanvasHeight: 1600"
          cursor="rayOrigin: mouse; fuse: false"
          raycaster="objects: .clickable, .floor-hit; interval: 40; far: 60"
+         light="defaultLightsEnabled: false"
          vr-mode-ui="enabled: true" loading-screen="enabled: false">
 
   <a-assets timeout="20000">
@@ -395,7 +399,7 @@
 
   <!-- pemain -->
   <a-entity id="rig">
-    <a-camera id="cam" position="0 1.6 30.6" wasd-controls="acceleration: 45; fly: false"
+    <a-camera id="cam" position="0 1.6 30.6" near="0.05" far="1500" fov="72" wasd-controls="acceleration: 45; fly: false"
               look-controls="pointerLockEnabled: false; magicWindowTrackingEnabled: false; reverseMouseDrag: false"
               mall-controls>
       <a-entity id="vr-cursor" visible="false"
@@ -1852,6 +1856,16 @@
     if (qa) qa.textContent = world ? t('q.active', { q: t('q.' + world.quality) }) : '';
   }
 
+  // post-processing sinematik (mall-post.js: GTAO, bloom, grading) — modul ES yang dimuat
+  // paralel; tier low dan browser tanpa dukungan tetap jalan dengan render biasa
+  function attachPost() {
+    if (!world || !window.MallPost) return;
+    var post = null;
+    try { post = MallPost.attach($('#scene'), { quality: world.quality }); }
+    catch (e) { console.warn('post-processing nonaktif:', e); }
+    world.attachPost(post);
+  }
+
   function buildWorld() {
     var bar = $('#loader-bar'), label = $('#loader-label');
     MallWorld.create(worldContext(function (f, key) {
@@ -1859,6 +1873,8 @@
       label.textContent = t('load.' + key);
     })).then(function (w) {
       world = w;
+      if (window.MallPost) attachPost();
+      else window.addEventListener('mallpost-ready', attachPost, { once: true });
       showTod();
       initNavigation();
       showQuality();
