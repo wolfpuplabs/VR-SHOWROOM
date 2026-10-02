@@ -191,7 +191,7 @@
   // granit gelap untuk apron etalase & lantai showroom
   TextureFactory.prototype.granite = function () {
     var N = new TileNoise(5), rnd = mulberry32(99);
-    var S = Math.min(this.Q.tex, 512);
+    var S = Math.min(this.Q.tex, this.Q.name === 'high' ? 1024 : 512);
     var speck = new Float32Array(S * S);
     for (var i = 0; i < S * S * 0.06; i++) speck[(rnd() * S * S) | 0] = rnd();
     return this.bake('granite', S, this.Q.tex, function (u, v, o) {
@@ -203,24 +203,43 @@
     }, 1.2);
   };
 
-  // kayu oak papan (lantai toko, booth, bangku)
+  // kayu oak papan: 6 baris papan per tile, sambungan ujung bersusun acak (staggered),
+  // warna & serat berbeda tiap papan, sesekali mata kayu
   TextureFactory.prototype.wood = function () {
-    var N = new TileNoise(7), N2 = new TileNoise(71);
-    var S = Math.min(this.Q.tex, 512);
+    var N = new TileNoise(7), N2 = new TileNoise(71), N3 = new TileNoise(113);
+    var S = Math.min(this.Q.tex, this.Q.name === 'high' ? 1024 : 512);
+    var ROWS = 6, rowRnd = mulberry32(5150), rows = [];
+    for (var r = 0; r < ROWS; r++) {
+      // tiap baris: satu sambungan ujung di posisi acak → papan sepanjang satu tile, bersusun
+      var j = 0.08 + rowRnd() * 0.84;
+      rows.push({ joints: [j, j], tones: [rowRnd(), rowRnd(), rowRnd()], knot: rowRnd() < 0.5 ? [rowRnd(), rowRnd()] : null });
+    }
     return this.bake('wood', S, this.Q.tex, function (u, v, o) {
-      var plank = Math.floor(v * 6);
-      var pv = (v * 6) % 1;
-      var seam = pv < 0.02 || pv > 0.98;
-      var grain = N.fbm(u * 0.25 + plank * 0.37, v * 6 * 0.18, 16, 4);
-      var rings = Math.sin((grain * 22 + v * 60 + plank * 3.1)) * 0.5 + 0.5;
-      var tone = N2.fbm(u, v, 2, 2) * 0.3 + (plank % 3) * 0.05;
-      var r = 150 + rings * 38 + tone * 60, g = 104 + rings * 28 + tone * 40, b = 64 + rings * 16 + tone * 22;
-      if (seam) { r *= 0.55; g *= 0.55; b *= 0.55; }
-      o.r = r; o.g = g; o.b = b;
-      o.h = seam ? 0 : 0.5 + rings * 0.04;
-      o.rough = seam ? 0.9 : 0.45 + rings * 0.12;
-    }, 2.5);
+      var ri = Math.floor(v * ROWS), row = rows[ri], pv = (v * ROWS) % 1;
+      var a = Math.min(row.joints[0], row.joints[1]), b = Math.max(row.joints[0], row.joints[1]);
+      var seg = u < a ? 0 : u < b ? 1 : 2, tone = row.tones[seg === 2 ? 0 : seg];   // segmen 2 menyambung ke segmen 0 tile berikutnya
+      var du = Math.min(Math.abs(u - a), Math.abs(u - b));
+      var seam = pv < 0.018 || pv > 0.982, joint = du < 0.0025;
+      // serat memanjang + cincin tahun, digeser per papan
+      var gu = u + tone * 7.3, warp = N.fbm(gu * 0.5, v * 2.0 + ri * 0.31, 6, 4);
+      var grain = Math.sin((pv * 5.0 + warp * 3.2 + tone * 20.0) * Math.PI) * 0.5 + 0.5;
+      var fine = N3.fbm(u * 0.25 + tone, v * 8.0, 32, 3);
+      var knot = 0;
+      if (row.knot) {
+        var kx = (u - row.knot[0]) * 7.0, ky = (pv - row.knot[1] * 0.6 - 0.2) * 1.6, kd = Math.sqrt(kx * kx + ky * ky);
+        knot = Math.max(0, 1 - kd * 3.2);
+        grain = mix01(grain, Math.sin(kd * 40.0) * 0.5 + 0.5, Math.max(0, 1 - kd * 1.4));
+      }
+      var base = 0.55 + tone * 0.45, var2 = N2.fbm(u, v, 3, 3) * 0.25;
+      var r0 = (130 + grain * 24 + fine * 26) * base + var2 * 60, g0 = (88 + grain * 25 + fine * 18) * base + var2 * 38, b0 = (54 + grain * 14 + fine * 10) * base + var2 * 20;
+      r0 *= 1 - knot * 0.45; g0 *= 1 - knot * 0.5; b0 *= 1 - knot * 0.5;
+      if (seam || joint) { r0 *= 0.5; g0 *= 0.5; b0 *= 0.5; }
+      o.r = r0; o.g = g0; o.b = b0;
+      o.h = seam || joint ? 0 : 0.5 + grain * 0.035 + fine * 0.03 - knot * 0.04;
+      o.rough = seam || joint ? 0.9 : 0.42 + grain * 0.1 + fine * 0.12;
+    }, 2.8);
   };
+  function mix01(a, b, t) { return a + (b - a) * t; }
 
   // terrazzo krem dengan serpih warna (serpih di tepi digambar ulang di sisi seberang → tileable)
   TextureFactory.prototype.terrazzo = function () {
@@ -267,7 +286,7 @@
   // beton poles (unit kosong) & plester dinding
   TextureFactory.prototype.concrete = function () {
     var N = new TileNoise(3), rnd = mulberry32(5);
-    var S = Math.min(this.Q.tex, 512);
+    var S = Math.min(this.Q.tex, this.Q.name === 'high' ? 1024 : 512);
     var pores = new Float32Array(S * S);
     for (var i = 0; i < S * S * 0.004; i++) pores[(rnd() * S * S) | 0] = 1;
     return this.bake('concrete', S, this.Q.tex, function (u, v, o) {
@@ -298,6 +317,16 @@
       o.r = o.g = o.b = 200 + s * 40;
       o.h = s * 0.2; o.rough = 0.25 + s * 0.2;
     }, 0.4);
+  };
+
+  // normal mikro (pori, butir halus) untuk dilihat dari dekat; dipakai di atas normal map utama
+  TextureFactory.prototype.detailNormal = function () {
+    if (this.cache.detailN) return this.cache.detailN;
+    var N = new TileNoise(131), S = 256, h = new Float32Array(S * S), rnd = mulberry32(9);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) h[y * S + x] = N.fbm(x / S, y / S, 16, 4) + rnd() * 0.08;
+    var t = this.tex(heightToNormal(h, S, 2.2), false);
+    this.cache.detailN = t;
+    return t;
   };
 
   // noda poles/bekas pel untuk clearcoatRoughnessMap: nilai rendah = kilap cermin
@@ -413,6 +442,64 @@
     return t;
   };
 
+  /* ====================== anti-tiling + detail mikro ======================= */
+  // mode 'stochastic': dua sampel dengan offset acak yang berganti mulus mengikuti noise
+  //   (teknik "texture repetition" Inigo Quilez) → pola tile tidak terlihat berulang.
+  // mode 'tiles': untuk ubin marmer bernat — tiap ubin memilih salah satu dari 4 ubin
+  //   di tekstur, diputar 90°×n, dan diberi variasi warna kecil; nat tetap lurus.
+  // detail: normal mikro frekuensi tinggi ditumpuk di atas normal map utama.
+  var AT_GLSL = [
+    'float atHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+    'float atNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+    '  return mix(mix(atHash(i), atHash(i + vec2(1, 0)), f.x), mix(atHash(i + vec2(0, 1)), atHash(i + vec2(1, 1)), f.x), f.y); }',
+    'vec4 atSample(sampler2D s, vec2 uv){',
+    '  float l = atNoise(uv * 0.37) * 8.0; float ia = floor(l), f = fract(l);',
+    '  vec2 oa = sin(vec2(3.0, 7.0) * ia), ob = sin(vec2(3.0, 7.0) * (ia + 1.0));',
+    '  vec2 dx = dFdx(uv), dy = dFdy(uv);',
+    '  vec4 a = textureGrad(s, uv + oa, dx, dy), b = textureGrad(s, uv + ob, dx, dy);',
+    '  return mix(a, b, smoothstep(0.2, 0.8, f - 0.1 * dot(a - b, vec4(1.0))));',
+    '}',
+    'mat2 mtRot; float mtTint;',
+    'vec2 mtUV(vec2 uv){',
+    '  vec2 g = uv * 2.0, cell = floor(g), loc = fract(g) - 0.5;',
+    '  float h = atHash(cell + 17.0), h2 = atHash(cell + 91.0); mtTint = atHash(cell + 3.7);',
+    '  float r = floor(h * 4.0) * 1.5707963; float c = cos(r), s = sin(r);',
+    '  mtRot = mat2(c, s, -s, c);',
+    '  vec2 pick = floor(vec2(h2, fract(h2 * 7.31)) * 2.0);',
+    '  return (pick + 0.5 + mtRot * loc) / 2.0;',
+    '}',
+    'vec4 mtSample(sampler2D s, vec2 uv){ vec2 u2 = mtUV(uv); return textureGrad(s, u2, mtRot * dFdx(uv), mtRot * dFdy(uv)); }',
+    'uniform sampler2D tDetailN; uniform float uDetailScale; uniform float uDetailK;'
+  ].join('\n');
+
+  function realism(m, mode, detailTex, detailScale, detailK) {
+    var prev = m.onBeforeCompile;
+    var fn = mode === 'tiles' ? 'mtSample' : mode === 'plain' ? 'texture2D' : 'atSample';
+    m.onBeforeCompile = function (sh, r) {
+      if (prev) prev.call(this, sh, r);
+      sh.uniforms.tDetailN = { value: detailTex };
+      sh.uniforms.uDetailScale = { value: detailScale || 6 };
+      sh.uniforms.uDetailK = { value: detailK || 0 };
+      var mapF = T.ShaderChunk.map_fragment.replace('texture2D( map, vMapUv )', fn + '( map, vMapUv )');
+      if (mode === 'tiles') mapF = mapF.replace('diffuseColor *= sampledDiffuseColor;', 'diffuseColor *= sampledDiffuseColor * (0.955 + 0.09 * mtTint);');
+      var roughF = T.ShaderChunk.roughnessmap_fragment.replace('texture2D( roughnessMap, vRoughnessMapUv )', fn + '( roughnessMap, vRoughnessMapUv )');
+      var nrmF = T.ShaderChunk.normal_fragment_maps
+        .replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
+          'vec3 mapN = ' + fn + '( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;' + (mode === 'tiles' ? ' mapN.xy = mapN.xy * mtRot;' : ''))
+        .replace('mapN.xy *= normalScale;', 'mapN.xy *= normalScale;\n\tvec3 dN = texture2D( tDetailN, vNormalMapUv * uDetailScale ).xyz * 2.0 - 1.0;\n\tmapN = normalize( vec3( mapN.xy + dN.xy * uDetailK, mapN.z ) );');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\n' + AT_GLSL)
+        .replace('#include <map_fragment>', mapF)
+        .replace('#include <roughnessmap_fragment>', roughF)
+        .replace('#include <normal_fragment_maps>', nrmF);
+    };
+    var key = 'real-' + mode + (detailK || 0);
+    var prevKey = m.customProgramCacheKey;
+    m.customProgramCacheKey = function () { return key + (prevKey ? prevKey.call(m) : ''); };
+    m.needsUpdate = true;
+    return m;
+  }
+
   /* ============================ material library =========================== */
   function MaterialLibrary(tf, Q, envMap) {
     this.tf = tf; this.Q = Q; this.env = envMap;
@@ -484,6 +571,19 @@
     this.foliage = std({ map: tf.foliage(), alphaTest: 0.4, side: T.DoubleSide, roughness: 0.8, metalness: 0 });
     this.shadow = new T.MeshBasicMaterial({ map: tf.blob(false), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
     this.shadowSq = new T.MeshBasicMaterial({ map: tf.blob(true), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+
+    // anti-tiling + detail mikro (tier medium/high; low tetap sederhana)
+    if (rich) {
+      var dn = tf.detailNormal();
+      realism(this.marble, 'tiles', dn, 9, 0.12);
+      realism(this.granite, 'stochastic', dn, 5, 0.22);
+      realism(this.concrete, 'stochastic', dn, 4, 0.3);
+      realism(this.plaster, 'stochastic', dn, 3, 0.25);
+      realism(this.ceiling, 'stochastic', dn, 3, 0.15);
+      realism(this.terrazzo, 'stochastic', dn, 6, 0.18);
+      realism(this.wood, 'plain', dn, 4, 0.12);          // papan kayu: struktur papan harus utuh
+      realism(this.woodDark, 'plain', dn, 4, 0.12);
+    }
 
     // penanda siapa yang boleh memproyeksikan bayangan real-time (tier high)
     [this.metalDark, this.metalSteel, this.wood, this.woodDark, this.planter, this.stoneLight, this.fascia,
@@ -1028,6 +1128,33 @@
       T.ShaderChunk.shadowmap_pars_fragment = chunk;
     }
 
+    // Box-projected (parallax-corrected) environment: pantulan probe dikoreksi terhadap kotak
+    // koridor, jadi etalase/kolom terpantul di posisi yang benar pada lantai & kaca, bukan
+    // "di tak hingga". Di luar kotak (dalam toko, plaza) pantulan biasa dipakai.
+    function installBoxProjection(center) {
+      var SC = T.ShaderChunk;
+      if (SC.envmap_physical_pars_fragment.indexOf('bpCorrect') >= 0) return;
+      var v3 = function (x, y, z) { return 'vec3(' + [x, y, z].map(function (n) { return n.toFixed(3); }).join(', ') + ')'; };
+      var bmin = v3(ctx.FRONT_L, 0.0, MALL.minZ), bmax = v3(ctx.FRONT_R, LV.sky, MALL.maxZ), bc = v3(center.x, center.y, center.z);
+      SC.shadowmap_pars_vertex = '#ifdef USE_ENVMAP\nvarying vec3 vBPWorld;\n#endif\n' + SC.shadowmap_pars_vertex;
+      SC.worldpos_vertex = SC.worldpos_vertex + '\n#ifdef USE_ENVMAP\n\tvBPWorld = worldPosition.xyz;\n#endif';
+      SC.envmap_physical_pars_fragment = SC.envmap_physical_pars_fragment.replace('#ifdef USE_ENVMAP', [
+        '#ifdef USE_ENVMAP',
+        'varying vec3 vBPWorld;',
+        'vec3 bpCorrect(vec3 dir){',
+        '  vec3 bmin = ' + bmin + ', bmax = ' + bmax + ';',
+        '  vec3 p = vBPWorld;',
+        '  if (any(lessThan(p, bmin)) || any(greaterThan(p, bmax))) return dir;',
+        '  vec3 t1 = (bmax - p) / dir, t2 = (bmin - p) / dir;',
+        '  vec3 tf = max(t1, t2);',
+        '  float t = min(min(tf.x, tf.y), tf.z);',
+        '  return normalize(p + dir * t - ' + bc + ');',
+        '}'].join('\n')).replace(
+        'reflectVec = inverseTransformDirection( reflectVec, viewMatrix );\n\t\t\tvec4 envMapColor',
+        'reflectVec = inverseTransformDirection( reflectVec, viewMatrix );\n\t\t\treflectVec = bpCorrect( reflectVec );\n\t\t\tvec4 envMapColor');
+      if (SC.envmap_physical_pars_fragment.indexOf('bpCorrect( reflectVec )') < 0) console.warn('box projection: chunk tidak cocok');
+    }
+
     function setupMaterials() {
       W.mat = new MaterialLibrary(W.tf, Q, W.envDay);
       W.B = new Builder(ctx.colliders);          // satu builder → geometri statis digabung per material
@@ -1457,7 +1584,7 @@
       var floorMat = !tenant ? M.concrete
         : brand.floor === 'wood' ? M.wood : brand.floor === 'terrazzo' ? M.terrazzo
         : brand.floor === 'granite' ? M.granite : M.paint('#26292e', 0.9);
-      B.floor(floorMat, 0, 0, Wd, D, 0.004, floorMat === M.wood ? 1.8 : 2);
+      B.floor(floorMat, 0, 0, Wd, D, 0.004, floorMat === M.wood ? 1.6 : 2);
       var wallMat = tenant ? M.plaster : M.paint('#d6d3cc', 0.95);
       B.box(wallMat, -Wd / 2, 2.3, 0, 0.3, 4.6, D, { collide: true, tile: 2.5 });
       B.box(wallMat, Wd / 2, 2.3, 0, 0.3, 4.6, D, { collide: true, tile: 2.5 });
@@ -2557,7 +2684,9 @@
       var view = new T.Vector3(), target = new T.Vector3(), plane = new T.Plane(), clip = new T.Vector4(), q = new T.Vector4();
       var size = new T.Vector2(), dirty = true;
 
-      M.onBeforeCompile = function (sh) {
+      var prevOBC = M.onBeforeCompile, prevKey = M.customProgramCacheKey;
+      M.onBeforeCompile = function (sh, r) {
+        if (prevOBC) prevOBC.call(this, sh, r);
         Object.assign(sh.uniforms, uniforms);
         sh.vertexShader = 'uniform mat4 uReflectMatrix;\nvarying vec4 vReflUv;\n' + sh.vertexShader.replace('#include <project_vertex>',
           '#include <project_vertex>\nvReflUv = uReflectMatrix * (modelMatrix * vec4(transformed, 1.0));');
@@ -2572,7 +2701,7 @@
           '}'
         ].join('\n'));
       };
-      M.customProgramCacheKey = function () { return 'marble-planar'; };
+      M.customProgramCacheKey = function () { return 'marble-planar' + (prevKey ? prevKey.call(M) : ''); };
       M.needsUpdate = true;
 
       function render(renderer, _scene, camera) {
@@ -2776,6 +2905,7 @@
         fitShadow();
         installPCSS();
         if (W.pano) {
+          installBoxProjection(new T.Vector3(0, 3.2, 4.5));
           // semua material PBR: simpan envMapIntensity asli → diskalakan applyTOD
           var seenM = [];
           W.envMats = [];
