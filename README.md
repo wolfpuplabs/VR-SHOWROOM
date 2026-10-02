@@ -1,12 +1,13 @@
-# VR Showroom &amp; Wolfpup Virtual Mall
+# Wolfpup Virtual Mall
 
-Dua halaman WebXR berbasis [A-Frame](https://aframe.io) yang bisa dibuka langsung di browser
-(desktop, HP, maupun headset VR) tanpa proses build.
+Mall 3D berbasis WebXR / [A-Frame](https://aframe.io) yang bisa dibuka langsung di browser
+(desktop, HP, tablet, maupun headset VR) tanpa proses build: space ritel yang bisa disewa,
+produk tenant dengan pratinjau 3D &amp; AR, dan showroom Porsche di dalam unit A4.
 
 | Halaman | Isi |
 | --- | --- |
-| `index.html` | Showroom VR Porsche 356B (model `assets/Porsche 356B.glb`) |
-| `mall.html` | Mall 3D yang bisa dijelajahi jalan kaki: space ritel yang bisa disewa + produk tenant dengan pratinjau 3D &amp; AR |
+| `index.html` | Langsung mengarahkan ke `mall.html` |
+| `mall.html` | Mall 3D yang bisa dijelajahi jalan kaki |
 
 ## Wolfpup Virtual Mall (`mall.html`)
 
@@ -188,15 +189,15 @@ Pengecualian dan penyetelan (lihat blok `env` di file workflow):
 ## Struktur berkas
 
 ```
-index.html                     showroom VR Porsche
+index.html                     redirect ke mall.html
 mall.html                      data, UI, leasing, product showcase, navigasi
 mall-world.js                  renderer 3D: material, pencahayaan, arsitektur, toko, FX
 mall-post.js                   post-processing (ES module): GTAO, bloom, grading sinematik
 vendor/three/                  pass post-processing three.js (MIT) + shim ke THREE milik A-Frame
-assets/Porsche 356B.glb        model showroom (dipakai juga oleh unit A4)
+assets/Porsche 356B.glb        mobil showroom unit A4 (web + AR Android)
 assets/products/*.glb          model produk tenant (web + AR Android)
 assets/products/*.usdz         versi AR Quick Look untuk iPhone/iPad
-assets/Porsche 356B.usdz       versi AR Quick Look untuk mobil showroom
+assets/Porsche 356B.usdz       versi AR Quick Look (bertekstur) untuk mobil showroom
 _headers                       MIME type .usdz/.glb untuk Netlify / Cloudflare Pages
 tools/generate-product-models.py  generator model produk (trimesh)
 tools/glb-to-usdz.py              konverter .glb -> .usdz (usd-core)

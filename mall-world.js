@@ -1505,7 +1505,7 @@
         lab.place(1.6, 0.9, F - 1.2, -0.35); rec.group.add(lab.mesh); W.i18n.push(lab);
         B.box(M.metalDark, 1.6, 0.4, F - 1.25, 0.06, 0.8, 0.06);
       }
-      // tombol menuju showroom VR (halaman lain)
+      // tombol membuka panel produk mobil (pratinjau 3D + View in AR)
       var link = makeSign(2.2, 0.5, { glow: true, px: 512 }, function (c, w, h) {
         roundRect(c, 0, 0, w, h, h * 0.2); c.fillStyle = '#ffb020'; c.fill();
         c.fillStyle = '#241500'; c.textBaseline = 'middle';
