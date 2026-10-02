@@ -830,24 +830,38 @@
     var TOD = {
       day: {
         dir: new T.Vector3(0.24, 1, 0.3).normalize(), color: new T.Color(0xfff0d8),
-        sun: Q.shadows ? 12 : 1.4, hemiSky: new T.Color(0xeaf2ff), hemiGround: new T.Color(0x74644f), hemi: Q.shadows ? 0.3 : 0.75,
-        point: 30, exposure: Q.shadows ? 0.9 : 1.0,
-        fog: new T.Color(0xd4d9df), fogDensity: 0.004
+        sun: Q.shadows ? 12 : 1.4, hemiSky: new T.Color(0xeaf2ff), hemiGround: new T.Color(0x74644f), hemi: Q.shadows ? 0.1 : 0.4,
+        point: 30, exposure: Q.shadows ? 0.82 : 0.95, envGain: 0.5,
+        fog: new T.Color(0xd4d9df), fogDensity: 0.0022
       },
       night: {
         dir: new T.Vector3(-0.32, 0.9, -0.3).normalize(), color: new T.Color(0x9fb6ff),
-        sun: Q.shadows ? 0.6 : 0.2, hemiSky: new T.Color(0x1b2442), hemiGround: new T.Color(0x0d0c0b), hemi: Q.shadows ? 0.07 : 0.12,
-        point: 55, exposure: 0.85,
+        sun: Q.shadows ? 0.6 : 0.2, hemiSky: new T.Color(0x1b2442), hemiGround: new T.Color(0x0d0c0b), hemi: Q.shadows ? 0.03 : 0.08,
+        point: 55, exposure: 0.78, envGain: 0.75,
         fog: new T.Color(0x0c0f17), fogDensity: 0.0075
       }
     };
 
     function setupLighting() {
-      W.envDay = buildEnvironment(renderer, false);
-      W.envNight = buildEnvironment(renderer, true);
-      scene.environment = W.envDay;
       W.sunDir = TOD.day.dir.clone();
-      W.sky = buildSky(TOD.day.dir, TOD.night.dir);
+      if (window.MallSky) {
+        // panorama 360° HDR dibuat otomatis (langit fisik, awan, siluet kota) → latar + HDRI
+        W.pano = MallSky.create(renderer, {
+          width: Q.name === 'high' ? 4096 : 2048, sunDir: TOD.day.dir, moonDir: TOD.night.dir, seed: 3.7
+        });
+        var pmrem = new T.PMREMGenerator(renderer);
+        W.pano.render(1); W.envSkyNight = pmrem.fromEquirectangular(W.pano.texture).texture;
+        W.pano.render(0); W.envSkyDay = pmrem.fromEquirectangular(W.pano.texture).texture;
+        pmrem.dispose();
+        W.pano.k = 0;
+        W.envDay = W.envSkyDay; W.envNight = W.envSkyNight;     // diganti light probe saat finish
+        W.sky = MallSky.dome(W.pano.texture);
+      } else {
+        W.envDay = buildEnvironment(renderer, false);
+        W.envNight = buildEnvironment(renderer, true);
+        W.sky = buildSky(TOD.day.dir, TOD.night.dir);
+      }
+      scene.environment = W.envDay;
       scene.add(W.sky);
 
       W.hemi = new T.HemisphereLight(0xeaf2ff, 0x74644f, TOD.day.hemi);
@@ -923,14 +937,91 @@
       W.points.forEach(function (p) { p.intensity = lerp(D.point, N.point, e); });
       renderer.toneMappingExposure = lerp(D.exposure, N.exposure, e);
       if (W.hdrU) W.hdrU.uHdrExposure.value = renderer.toneMappingExposure;
-      W.sky.material.uniforms.uNight.value = e;
+      if (W.pano) {
+        // panorama dibuat ulang saat transisi (dibatasi tiap 3 frame) dan sekali di posisi akhir
+        W.panoTick = (W.panoTick || 0) + 1;
+        if (W.pano.k !== e && (e === 0 || e === 1 || W.panoTick % 3 === 0)) { W.pano.render(e); W.pano.k = e; }
+      } else {
+        W.sky.material.uniforms.uNight.value = e;
+      }
       scene.environment = e < 0.5 ? W.envDay : W.envNight;
       if (W.shaftMat) W.shaftMat.uniforms.uStrength.value = 1 - e;
       (W.lampGlows || []).forEach(function (g) { g.material.opacity = e * 0.95; });
       (W.lampHeads || []).forEach(function (m) { m.color.setScalar(0.25 + e * 0.75); });
       if (scene.fog) { scene.fog.color.copy(D.fog).lerp(N.fog, e); scene.fog.density = lerp(D.fogDensity, N.fogDensity, e); }
       if (W.post) W.post.setNight(e);
+      // intensitas cahaya tak langsung (light probe) per siang/malam
+      if (W.envMats) {
+        var gain = lerp(D.envGain, N.envGain, e);
+        for (var mi = 0; mi < W.envMats.length; mi++) W.envMats[mi].m.envMapIntensity = W.envMats[mi].base * gain;
+      }
       fitShadow();
+    }
+
+    /* --------------- global illumination: light probe dari mall itu sendiri --------------- */
+    // Mall dirender ke cubemap dari tengah koridor (matahari, langit HDR, lampu, signage
+    // yang menyala, pantulan lantai & dinding), lalu dijadikan PMREM untuk cahaya tak
+    // langsung (diffuse + spekular) semua material. Tier high mengulang sekali lagi memakai
+    // hasil pertama → dua pantulan cahaya (bounce). Dilakukan sekali per siang/malam saat memuat.
+    function captureProbe(k) {
+      applyTOD(k);
+      scene.environment = k ? W.envSkyNight : W.envSkyDay;
+      var size = Q.name === 'high' ? 256 : 128, bounces = Q.name === 'high' ? 2 : 1;
+      var cubeRT = new T.WebGLCubeRenderTarget(size, { type: T.HalfFloatType });
+      var cam = new T.CubeCamera(0.1, 1500, cubeRT);
+      cam.position.set(0, 3.2, 4.5);
+      scene.add(cam);
+      var pins = W.pins.map(function (p) { var v = p.sprite ? p.sprite.visible : true; if (p.sprite) p.sprite.visible = false; return v; });
+      var pmrem = new T.PMREMGenerator(renderer), probe = null;
+      W.capturing = true;
+      for (var b = 0; b < bounces; b++) {
+        renderer.shadowMap.needsUpdate = true;
+        cam.update(renderer, scene);
+        var next = pmrem.fromCubemap(cubeRT.texture);
+        if (probe) probe.dispose();
+        probe = next;
+        scene.environment = probe.texture;
+      }
+      W.capturing = false;
+      W.pins.forEach(function (p, i) { if (p.sprite) p.sprite.visible = pins[i]; });
+      scene.remove(cam); cubeRT.dispose(); pmrem.dispose();
+      return probe.texture;
+    }
+
+    // PCSS: bayangan matahari tajam di dekat kaki objek dan melembut makin jauh
+    // (contact-hardening), seperti bayangan sungguhan. Hanya tier high.
+    function installPCSS() {
+      if (!Q.softShadows || T.ShaderChunk.shadowmap_pars_fragment.indexOf('pcssShadow') >= 0) return;
+      var sc = W.sun.shadow.camera;
+      var frustum = Math.max(sc.right - sc.left, sc.top - sc.bottom), range = sc.far - sc.near;
+      var f = function (v) { return v.toFixed(6); };
+      var code = [
+        '#define PCSS_RANGE ' + f(range),
+        '#define PCSS_FRUSTUM ' + f(frustum),
+        '#define PCSS_SUN_TAN 0.022',                                      // ±1,3° (matahari + difusi kaca skylight)
+        '#define PCSS_MAX_UV ' + f(0.9 / frustum),
+        '#define PCSS_MIN_UV ' + f(1.6 / Q.shadowSize),
+        'vec2 pcssDisk(int i, float n, float rot){ float r = sqrt((float(i) + 0.5) / n); float a = float(i) * 2.399963 + rot; return vec2(cos(a), sin(a)) * r; }',
+        'float pcssShadow(sampler2D map, vec4 c){',
+        '  float rot = rand(gl_FragCoord.xy) * 6.283185;',
+        '  float zR = c.z, sum = 0.0, nb = 0.0;',
+        '  for (int i = 0; i < 12; i++) {',
+        '    float d = unpackRGBAToDepth(texture2D(map, c.xy + pcssDisk(i, 12.0, rot) * PCSS_MAX_UV));',
+        '    if (d < zR) { sum += d; nb += 1.0; }',
+        '  }',
+        '  if (nb < 0.5) return 1.0;',
+        '  float zB = sum / nb;',
+        '  float r = clamp((zR - zB) * PCSS_RANGE * PCSS_SUN_TAN / PCSS_FRUSTUM, PCSS_MIN_UV, PCSS_MAX_UV);',
+        '  float lit = 0.0;',
+        '  for (int i = 0; i < 20; i++) lit += step(zR, unpackRGBAToDepth(texture2D(map, c.xy + pcssDisk(i, 20.0, rot + 1.3) * r)));',
+        '  return lit / 20.0;',
+        '}',
+        ''
+      ].join('\n');
+      var chunk = T.ShaderChunk.shadowmap_pars_fragment;
+      chunk = chunk.replace('#ifdef USE_SHADOWMAP', '#ifdef USE_SHADOWMAP\n' + code);
+      chunk = chunk.replace('#if defined( SHADOWMAP_TYPE_PCF )', 'return pcssShadow( shadowMap, shadowCoord );\n\t\t#if defined( SHADOWMAP_TYPE_PCF )');
+      T.ShaderChunk.shadowmap_pars_fragment = chunk;
     }
 
     function setupMaterials() {
@@ -2161,7 +2252,7 @@
 
       function render(renderer, _scene, camera) {
         // di VR (WebXR) refleksi planar dimatikan; lantai kembali memakai IBL clearcoat
-        var xr = renderer.xr.isPresenting;
+        var xr = renderer.xr.isPresenting || W.capturing;
         uniforms.uReflect.value = xr ? 0 : 1;
         if (!dirty || xr || !camera.isPerspectiveCamera) return;
         dirty = false;
@@ -2342,6 +2433,31 @@
       .then(step('finish', 0.95, function () {
         W.B.flush(W.root, Q.shadows);
         buildFloorReflection();
+        fitShadow();
+        installPCSS();
+        if (W.pano) {
+          // semua material PBR: simpan envMapIntensity asli → diskalakan applyTOD
+          var seenM = [];
+          W.envMats = [];
+          scene.traverse(function (o) {
+            var m = o.material;
+            if (!m || Array.isArray(m) || !m.isMeshStandardMaterial || seenM.indexOf(m) >= 0) return;
+            seenM.push(m); W.envMats.push({ m: m, base: m.envMapIntensity });
+          });
+          // model produk (GLB) dimuat belakangan → ikut didaftarkan
+          sceneEl.addEventListener('model-loaded', function (ev) {
+            var root = ev.detail && ev.detail.model, k = W.tod.k, e = k * k * (3 - 2 * k);
+            var gain = lerp(TOD.day.envGain, TOD.night.envGain, e);
+            if (root) root.traverse(function (o) {
+              var m = o.material;
+              if (!m || Array.isArray(m) || !m.isMeshStandardMaterial || seenM.indexOf(m) >= 0) return;
+              seenM.push(m); W.envMats.push({ m: m, base: m.envMapIntensity });
+              m.envMapIntensity *= gain;
+            });
+          });
+          W.envDay = captureProbe(0);
+          W.envNight = captureProbe(1);
+        }
         applyTOD(ctx.timeOfDay === 'night' ? 1 : 0);
         W.tod.target = W.tod.k;
         refreshDynamic();
