@@ -935,6 +935,7 @@
       W.hemi.groundColor.copy(D.hemiGround).lerp(N.hemiGround, e);
       W.hemi.intensity = lerp(D.hemi, N.hemi, e);
       W.points.forEach(function (p) { p.intensity = lerp(D.point, N.point, e); });
+      (W.cafeLights || []).forEach(function (p) { p.intensity = lerp(14, 22, e); });
       renderer.toneMappingExposure = lerp(D.exposure, N.exposure, e);
       if (W.hdrU) W.hdrU.uHdrExposure.value = renderer.toneMappingExposure;
       if (W.pano) {
@@ -1170,7 +1171,7 @@
       A1: { name: 'Nusantara Batik', sub: 'WASTRA · BATIK TULIS', style: 'serif', bg: '#2a1c12', fg: '#e8c88a', accent: '#c9964f', floor: 'wood', wall: '#6b4a2f', stock: ['#8c5a34', '#c9964f', '#3f5d52'] },
       A3: { name: 'TechNest', sub: 'GADGETS & WEARABLES', style: 'sans', bg: '#0a1220', fg: '#5fd4ff', accent: '#2aa9e0', floor: 'terrazzo', wall: '#18222f', stock: ['#2b3442', '#5fd4ff', '#e7ebf2'] },
       A4: { name: 'PORSCHE GALLERY', sub: 'CLASSIC · SINCE 1948', style: 'wide', bg: '#0c0c0e', fg: '#e9e9e9', accent: '#c8102e', floor: 'granite', wall: '#17181c', stock: [] },
-      A6: { name: 'Kopi Senja', sub: 'SPECIALTY COFFEE', style: 'serif', bg: '#3a2417', fg: '#f3d9b1', accent: '#d98b4a', floor: 'wood', wall: '#5a3a26', stock: ['#6b4430', '#d98b4a', '#f3e6d0'] },
+      A6: { name: 'Kopi Senja', sub: 'SPECIALTY COFFEE', style: 'serif', bg: '#3a2417', fg: '#f3d9b1', accent: '#d98b4a', floor: 'wood', wall: '#5a3a26', stock: ['#6b4430', '#d98b4a', '#f3e6d0'], cafe: true },
       B1: { name: 'Aroma Bakery', sub: 'PATISSERIE · ARTISAN BREAD', style: 'serif', bg: '#fbefe9', fg: '#a8435b', accent: '#e8a0b4', floor: 'terrazzo', wall: '#f1d7dc', stock: ['#e8a0b4', '#f6e2c0', '#c98b4b'] },
       B4: { name: 'ZEN FITNESS', sub: 'GYM · YOGA STUDIO', style: 'wide', bg: '#0e1d17', fg: '#7ee0a6', accent: '#39b77a', floor: 'rubber', wall: '#1d3429', stock: ['#2b2f38', '#5aa9a0', '#7ee0a6'] },
       K1: { name: 'Juice Bar Segar', sub: 'FRESH · COLD PRESSED', style: 'round', bg: '#ff8a1f', fg: '#ffffff', accent: '#ffb347', stock: [] }
@@ -1508,6 +1509,7 @@
     function buildTenantInterior(u, rec, B, brand, Wd, D, F) {
       var M = W.mat, rnd = mulberry32(u.id.charCodeAt(0) * 31 + u.id.charCodeAt(1));
       var showroom = u.id === 'A4';
+      if (brand.cafe) return buildCafe(u, rec, B, brand, Wd, D, F, rnd);
 
       // panel lampu plafon
       for (var zz = -F + 1.5; zz < F - 0.8; zz += 2.2) {
@@ -1573,6 +1575,193 @@
       });
 
       if (showroom) buildShowroom(u, rec, B, F);
+    }
+
+    /* ---------------- kafe (Kopi Senja): bar kopi, menu, meja, pendant ---------------- */
+    function buildCafe(u, rec, B, brand, Wd, D, F, rnd) {
+      var M = W.mat;
+      var walnut = M.woodDark, oak = M.wood, top = M.granite;
+      var cup = M.paint('#f3efe8', 0.35), bean = M.paint('#2c1a10', 0.7), copper = M.brass;
+      var leather = M.paint('#6a3b22', 0.5), bag = brand.stock.map(function (h) { return M.paint(h, 0.75); });
+
+      // plafon bilah kayu di atas plafon gelap + cove LED hangat di dinding belakang
+      B.plane(M.paint('#17120e', 0.95), 0, 4.16, 0, Wd - 0.3, D - 0.3, { rx: Math.PI / 2 });
+      for (var sx = -Wd / 2 + 0.25; sx < Wd / 2 - 0.1; sx += 0.28) B.box(oak, sx, 4.1, 0, 0.09, 0.05, D - 0.4);
+      B.box(M.ledWarm, 0, 3.92, -F + 0.2, Wd - 0.8, 0.03, 0.04);
+      // dinding samping: wainscot kayu + cat limewash hangat
+      var lime = M.paint('#b79c7f', 0.92);
+      [-1, 1].forEach(function (side) {
+        var wx = side * (Wd / 2 - 0.16);
+        B.box(lime, wx, 2.6, 0, 0.02, 3.0, D - 0.6);
+        B.box(walnut, wx - side * 0.005, 0.6, 0, 0.03, 1.2, D - 0.6);
+        B.box(copper, wx - side * 0.02, 1.21, 0, 0.02, 0.03, D - 0.6);
+      });
+      // satu lampu titik hangat: kafe terasa hangat walau koridor sedang siang
+      if (Q.name !== 'low') {
+        var warm = new T.PointLight(0xffb978, 0, 11, 2);
+        warm.position.set(0, 3.6, 0.5); rec.group.add(warm);
+        W.cafeLights = (W.cafeLights || []).concat([warm]);
+      }
+
+      // ---- bar kopi di belakang ----
+      var bz = -F + 1.85, Lb = Wd - 2.2, bh = 1.05;
+      B.box(M.blackGloss, 0, 0.05, bz, Lb - 0.1, 0.1, 0.62);
+      B.box(walnut, 0, 0.55, bz - 0.03, Lb, 0.9, 0.62, { collide: true });
+      for (var fx = -Lb / 2 + 0.06; fx < Lb / 2 - 0.02; fx += 0.085) B.box(oak, fx, 0.56, bz + 0.29, 0.05, 0.86, 0.03);   // bilah depan
+      B.box(top, 0, bh - 0.025, bz, Lb + 0.1, 0.05, 0.82);
+      B.box(copper, 0, 0.12, bz + 0.33, Lb, 0.02, 0.02);                                   // pijakan kaki kuningan
+      B.shadow(M, 0, bz, Lb + 1, 1.5, true);
+
+      // mesin espresso dua group head
+      var ex = -Lb / 2 + 1.1, ey = bh;
+      B.box(M.metalSteel, ex, ey + 0.23, bz - 0.12, 0.78, 0.42, 0.5);
+      B.box(M.blackGloss, ex, ey + 0.46, bz - 0.12, 0.8, 0.04, 0.52);
+      B.box(copper, ex, ey + 0.3, bz + 0.135, 0.5, 0.08, 0.01);
+      [-0.18, 0.18].forEach(function (gx) {
+        B.cyl(M.metalSteel, ex + gx, ey + 0.13, bz + 0.17, 0.045, 0.05, 0.08, { seg: 16 });
+        B.box(M.blackGloss, ex + gx, ey + 0.1, bz + 0.27, 0.035, 0.03, 0.18);         // gagang portafilter
+        B.cyl(cup, ex + gx, ey + 0.035, bz + 0.17, 0.035, 0.028, 0.07, { seg: 14 });
+      });
+      B.box(M.metalDark, ex, ey + 0.015, bz + 0.16, 0.7, 0.03, 0.2);                   // drip tray
+      B.cyl(M.metalSteel, ex + 0.36, ey + 0.2, bz + 0.16, 0.008, 0.008, 0.28, { seg: 6, rz: 0.35 });   // steam wand
+      for (var ci = 0; ci < 5; ci++) B.cyl(cup, ex - 0.28 + ci * 0.14, ey + 0.52, bz - 0.15, 0.04, 0.03, 0.08, { seg: 12 });
+      // grinder
+      var gx2 = ex + 0.75;
+      B.box(M.metalDark, gx2, ey + 0.18, bz - 0.1, 0.2, 0.36, 0.26);
+      B.cyl(M.glassCase, gx2, ey + 0.46, bz - 0.1, 0.1, 0.06, 0.22, { seg: 16 });
+      B.cyl(bean, gx2, ey + 0.42, bz - 0.1, 0.085, 0.055, 0.13, { seg: 16 });
+      // POS + toples biji kopi
+      var pos = new T.BoxGeometry(0.3, 0.22, 0.02); pos.rotateX(-0.4); pos.translate(Lb / 2 - 1.9, ey + 0.2, bz + 0.2);
+      B.add(M.screen, pos);
+      B.box(M.metalDark, Lb / 2 - 1.9, ey + 0.06, bz + 0.16, 0.04, 0.12, 0.04);
+      // etalase pastry di ujung bar
+      var px = Lb / 2 - 0.65;
+      B.box(M.glassCase, px, ey + 0.24, bz, 0.95, 0.46, 0.6);
+      B.box(M.metalDark, px, ey + 0.475, bz, 0.97, 0.02, 0.62);
+      B.box(M.ledWarm, px, ey + 0.46, bz, 0.7, 0.008, 0.04);
+      B.box(M.stoneLight, px, ey + 0.2, bz, 0.9, 0.015, 0.55);
+      var pastry = [M.paint('#c98a3e', 0.55), M.paint('#e0b070', 0.55), M.paint('#5a3220', 0.5), M.paint('#f1e2c6', 0.5)];
+      for (var pi = 0; pi < 8; pi++) {
+        var ppx = px - 0.36 + (pi % 4) * 0.24, ppz = bz - 0.12 + Math.floor(pi / 4) * 0.24, shelf = pi % 2 ? ey + 0.215 : ey + 0.01;
+        B.cyl(pastry[pi % 4], ppx, shelf + 0.035, ppz, 0.075, 0.085, 0.07, { seg: 14 });
+      }
+
+      // ---- lemari belakang + rak terbuka ----
+      B.box(M.blackGloss, 0, 0.45, -F + 0.5, Wd - 1.2, 0.9, 0.6, { collide: true });
+      B.box(top, 0, 0.92, -F + 0.5, Wd - 1.1, 0.04, 0.64);
+      [1.45, 1.85].forEach(function (y) {
+        [-1, 1].forEach(function (side) {
+          var sx2 = side * (Wd / 2 - 1.55);
+          B.box(oak, sx2, y, -F + 0.32, 1.9, 0.04, 0.3);
+          for (var k = 0; k < 6; k++) {
+            var jx = sx2 - 0.8 + k * 0.32;
+            if ((k + (y > 1.6 ? 1 : 0)) % 2) {
+              B.cyl(M.glassCase, jx, y + 0.13, -F + 0.32, 0.07, 0.07, 0.22, { seg: 14 });
+              B.cyl(bean, jx, y + 0.09, -F + 0.32, 0.062, 0.062, 0.14, { seg: 14 });
+            } else B.box(bag[k % bag.length], jx, y + 0.14, -F + 0.32, 0.16, 0.26, 0.09);
+          }
+        });
+      });
+
+      // logo menyala + dua papan menu kapur
+      var logoW = Math.min(3.0, Wd * 0.36);
+      var logo = makeSign(logoW, 0.8, { glow: true, px: 1024, intensity: 0.95 }, function (c, w, h) { drawBrand(c, w, h, brand, false); });
+      logo.place(0, 2.85, -F + 0.17, 0); rec.group.add(logo.mesh);
+      var menuW = Math.min(1.5, Wd / 2 - logoW / 2 - 0.45), menuX = logoW / 2 + 0.2 + menuW / 2;
+      var MENU = [
+        { head: 'w3.cafeCoffee', items: [['Espresso', '22'], ['Americano', '26'], ['Cappuccino', '32'], ['Cafe Latte', '34'], ['Kopi Susu Senja', '30'], ['V60 Manual Brew', '38']] },
+        { head: 'w3.cafeOther', items: [['Matcha Latte', '36'], ['Teh Tarik', '24'], ['Croissant', '28'], ['Pain au Chocolat', '32'], ['Banana Bread', '26'], ['Cheesecake', '38']] }
+      ];
+      MENU.forEach(function (mn, i) {
+        var board = makeSign(menuW, menuW * 0.82, { px: 512 }, function (c, w, h) {
+          c.fillStyle = '#1b1d1a'; c.fillRect(0, 0, w, h);
+          c.strokeStyle = '#8a5a34'; c.lineWidth = w * 0.025; c.strokeRect(0, 0, w, h);
+          c.fillStyle = '#f2e6cf'; c.textBaseline = 'middle';
+          fit(c, ctx.t(mn.head), '700', h * 0.1, 'serif', w * 0.85);
+          c.textAlign = 'center'; c.fillText(ctx.t(mn.head), w / 2, h * 0.13);
+          c.fillStyle = 'rgba(242,230,207,.35)'; c.fillRect(w * 0.12, h * 0.21, w * 0.76, 2);
+          mn.items.forEach(function (it, r) {
+            var y = h * (0.31 + r * 0.115);
+            c.fillStyle = '#f2e6cf'; c.font = font('500', h * 0.062, 'ui'); c.textAlign = 'left'; c.fillText(it[0], w * 0.09, y);
+            c.fillStyle = '#e8a25c'; c.textAlign = 'right'; c.fillText(it[1] + 'K', w * 0.91, y);
+          });
+        });
+        board.place((i ? 1 : -1) * menuX, 2.6, -F + 0.17, 0); rec.group.add(board.mesh); W.i18n.push(board);
+      });
+
+      // pendant lamp: kabel, kap kuningan, bola lampu menyala
+      function pendant(x, z, drop) {
+        var y = 4.05 - drop;
+        B.cyl(M.metalDark, x, (4.08 + y) / 2, z, 0.004, 0.004, 4.08 - y, { seg: 4 });
+        B.cyl(copper, x, y, z, 0.03, 0.17, 0.2, { seg: 20, open: true });
+        B.cyl(M.metalDark, x, y + 0.11, z, 0.03, 0.03, 0.04, { seg: 10 });
+        B.cyl(M.ledWarm, x, y - 0.05, z, 0.045, 0.045, 0.07, { seg: 12 });
+      }
+      [-Lb / 3, 0, Lb / 3].forEach(function (x) { pendant(x, bz, 1.55); });
+
+      // ---- area duduk ----
+      function chair(x, z, rot) {
+        var c = Math.cos(rot), s = Math.sin(rot);
+        function at(dx, dz) { return [x + dx * c + dz * s, z - dx * s + dz * c]; }
+        var seat = at(0, 0);
+        B.box(oak, seat[0], 0.46, seat[1], 0.42, 0.04, 0.42, { ry: rot });
+        var back = at(0, -0.2);
+        B.box(oak, back[0], 0.8, back[1], 0.4, 0.16, 0.025, { ry: rot });
+        [-0.18, 0.18].forEach(function (bxo) { var bp = at(bxo, -0.2); B.cyl(M.metalDark, bp[0], 0.65, bp[1], 0.012, 0.012, 0.38, { seg: 6 }); });
+        [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]].forEach(function (l) {
+          var p = at(l[0], l[1]);
+          B.cyl(M.metalDark, p[0], 0.23, p[1], 0.012, 0.012, 0.46, { seg: 6 });
+        });
+      }
+      function roundTable(x, z) {
+        B.cyl(M.stoneLight, x, 0.745, z, 0.36, 0.36, 0.03, { seg: 28 });
+        B.cyl(M.metalDark, x, 0.37, z, 0.03, 0.03, 0.72, { seg: 8 });
+        B.cyl(M.metalDark, x, 0.015, z, 0.22, 0.24, 0.03, { seg: 20 });
+        B.cyl(cup, x + 0.1, 0.8, z - 0.05, 0.04, 0.03, 0.08, { seg: 12 });
+        B.collider(x, z, 0.8, 0.8, 0);
+        B.shadow(M, x, z, 1.6, 1.6);
+      }
+      // kiri: banquette kulit sepanjang dinding + meja kecil
+      var z0 = bz + 1.6, z1 = F - 1.9, bx = -Wd / 2 + 0.45;
+      B.box(walnut, bx, 0.22, (z0 + z1) / 2, 0.6, 0.44, z1 - z0, { collide: true });
+      B.box(leather, bx + 0.02, 0.5, (z0 + z1) / 2, 0.56, 0.12, z1 - z0 - 0.04);
+      for (var cz2 = z0 + 0.4; cz2 < z1; cz2 += 0.8) B.box(leather, bx - 0.22, 0.86, cz2, 0.14, 0.58, 0.76);   // bantal sandaran berjahit
+      for (var tz = z0 + 0.7; tz < z1 - 0.3; tz += 1.5) {
+        var tx = bx + 0.85;
+        B.box(M.stoneLight, tx, 0.745, tz, 0.6, 0.03, 0.6);
+        B.cyl(M.metalDark, tx, 0.37, tz, 0.03, 0.03, 0.72, { seg: 8 });
+        B.box(M.metalDark, tx, 0.015, tz, 0.4, 0.03, 0.4);
+        B.cyl(cup, tx - 0.1, 0.8, tz + 0.08, 0.04, 0.03, 0.08, { seg: 12 });
+        chair(tx + 0.6, tz, -Math.PI / 2);
+        B.collider(tx, tz, 0.7, 0.7, 0);
+        pendant(tx, tz, 1.75);
+      }
+      // kanan: meja bundar dengan dua kursi
+      var rx = Wd / 2 - 1.45;
+      for (var rz = z0 + 0.6; rz < z1 - 0.2; rz += 2.0) {
+        roundTable(rx, rz);
+        chair(rx - 0.62, rz, Math.PI / 2);
+        chair(rx + 0.62, rz, -Math.PI / 2);
+        pendant(rx, rz, 1.65);
+      }
+      // tanaman di pot
+      [[Wd / 2 - 0.45, -F + 1.3], [-Wd / 2 + 0.5, bz + 0.9]].forEach(function (pp) {
+        B.cyl(M.planter, pp[0], 0.28, pp[1], 0.2, 0.15, 0.56, { seg: 18, collide: true });
+        shrubs(B, pp[0], pp[1], 0.25, 0.25, 3, rnd, 0.5);
+      });
+
+      // ---- etalase merchandise di jendela + neon OPEN ----
+      var booths = u.products.filter(function (p) { return p.booth === 0 || p.booth === 1; });
+      booths.forEach(function (pr) {
+        mountProduct(rec, B, pr, (pr.booth === 0 ? -1 : 1) * (Wd / 2 - 0.95), F - 0.95, 0.95, 0.7);
+      });
+      var neon = makeSign(0.9, 0.34, { glow: true, px: 256, transparent: true }, function (c, w, h) {
+        c.clearRect(0, 0, w, h);
+        c.textBaseline = 'middle'; c.textAlign = 'center'; c.font = font('700', h * 0.62, 'serif');
+        c.shadowColor = '#ff7a3a'; c.shadowBlur = h * 0.18; c.fillStyle = '#ffb27a';
+        c.fillText(ctx.t('w3.open'), w / 2, h * 0.52);
+      });
+      neon.place(-(Wd / 2 - 0.95), 2.55, F - 0.2, 0); rec.group.add(neon.mesh); W.i18n.push(neon);
     }
 
     function buildShowroom(u, rec, B, F) {
