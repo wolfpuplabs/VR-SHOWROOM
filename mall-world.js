@@ -837,7 +837,7 @@
       night: {
         dir: new T.Vector3(-0.32, 0.9, -0.3).normalize(), color: new T.Color(0x9fb6ff),
         sun: Q.shadows ? 0.6 : 0.2, hemiSky: new T.Color(0x1b2442), hemiGround: new T.Color(0x0d0c0b), hemi: Q.shadows ? 0.03 : 0.08,
-        point: 55, exposure: 0.78, envGain: 0.75,
+        point: 55, exposure: Q.name === 'high' ? 0.78 : 0.95, envGain: Q.name === 'high' ? 0.75 : 0.95,
         fog: new T.Color(0x0c0f17), fogDensity: 0.0075
       }
     };
@@ -936,6 +936,8 @@
       W.hemi.intensity = lerp(D.hemi, N.hemi, e);
       W.points.forEach(function (p) { p.intensity = lerp(D.point, N.point, e); });
       (W.cafeLights || []).forEach(function (p) { p.intensity = lerp(14, 22, e); });
+      if (W.fountainCaustic) W.fountainCaustic.value = lerp(0.9, 0.35, e);
+      if (W.fountainLight) W.fountainLight.value.setRGB(lerp(1.25, 0.95, e), lerp(1.3, 0.85, e), lerp(1.35, 0.7, e));
       renderer.toneMappingExposure = lerp(D.exposure, N.exposure, e);
       if (W.hdrU) W.hdrU.uHdrExposure.value = renderer.toneMappingExposure;
       if (W.pano) {
@@ -951,6 +953,7 @@
       (W.lampHeads || []).forEach(function (m) { m.color.setScalar(0.25 + e * 0.75); });
       if (scene.fog) { scene.fog.color.copy(D.fog).lerp(N.fog, e); scene.fog.density = lerp(D.fogDensity, N.fogDensity, e); }
       if (W.post) W.post.setNight(e);
+      if (window.MallAudio) MallAudio.setNight(e);
       // intensitas cahaya tak langsung (light probe) per siang/malam
       if (W.envMats) {
         var gain = lerp(D.envGain, N.envGain, e);
@@ -1934,6 +1937,35 @@
     // ---------- air mancur bertingkat + air beriak (shader) + semburan ----------
     function buildFountain() {
       var M = W.mat, B = W.B.frame(0, 0, 0);
+      var IMPACT_R = 1.42, NOZZLE_R = 2.33;
+
+      // dasar bak dengan kaustik air bergerak (opaque → ikut terlihat lewat refraksi air)
+      var causticU = { uTime: { value: 0 }, uCaustic: { value: 1 } };
+      function causticMat(base) {
+        var m = base.clone();
+        m.userData = Object.assign({}, base.userData);
+        m.onBeforeCompile = function (sh) {
+          Object.assign(sh.uniforms, causticU);
+          sh.vertexShader = 'varying vec3 vCWorld;\n' + sh.vertexShader.replace('#include <worldpos_vertex>',
+            '#include <worldpos_vertex>\nvCWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+          sh.fragmentShader = [
+            'uniform float uTime; uniform float uCaustic; varying vec3 vCWorld;',
+            'float causticF(vec2 uv, float t){',
+            '  vec2 p = mod(uv * 6.28318, 6.28318) - 250.0; vec2 i = p; float c = 1.0;',
+            '  for (int n = 0; n < 4; n++) {',
+            '    float tt = t * (1.0 - (3.5 / float(n + 1)));',
+            '    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));',
+            '    c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / 0.005), p.y / (cos(i.y + tt) / 0.005)));',
+            '  }',
+            '  c /= 4.0; c = 1.17 - pow(c, 1.4); return clamp(pow(abs(c), 8.0), 0.0, 2.0);',
+            '}'].join('\n') + '\n' + sh.fragmentShader.replace('#include <opaque_fragment>',
+            'outgoingLight += diffuseColor.rgb * causticF(vCWorld.xz * 0.45, uTime * 0.55) * uCaustic;\n#include <opaque_fragment>');
+        };
+        m.customProgramCacheKey = function () { return 'caustic'; };
+        return m;
+      }
+      var floorC = causticMat(M.granite), floorTop = causticMat(M.stoneLight);
+
       // bak bertingkat sebagai wadah terbuka: dinding luar, dinding dalam (menghadap ke dalam),
       // bibir atas berbentuk cincin, dan dasar — air terlihat di dalamnya
       var inner = W.mat.stoneInner || (W.mat.stoneInner = M.stoneLight.clone());
@@ -1943,64 +1975,168 @@
         B.cyl(inner, 0, (y0 + y1) / 2 + 0.02, 0, rIn, rIn, y1 - y0 - 0.04, { seg: 72, open: true });
         var rim = new T.RingGeometry(rIn, rOut, 72); rim.rotateX(-Math.PI / 2); rim.translate(0, y1, 0);
         B.add(M.stoneLight, rim);
-        var fl = new T.CircleGeometry(rIn, 72); fl.rotateX(-Math.PI / 2); fl.translate(0, y0 + 0.06, 0);
-        B.add(floorMat, fl);
+        var fl = new T.Mesh(new T.CircleGeometry(rIn, 72), floorMat);
+        fl.geometry.rotateX(-Math.PI / 2); fl.position.y = y0 + 0.06;
+        fl.receiveShadow = Q.shadows; W.root.add(fl);
       }
-      basin(2.5, 2.72, 0, 0.56, M.granite);
+      basin(2.5, 2.72, 0, 0.56, floorC);
       B.torus(M.stoneLight, 0, 0.56, 0, 2.61, 0.1, { rx: Math.PI / 2, ts: 96, rs: 12 });
       B.cyl(M.stoneLight, 0, 0.35, 0, 1.12, 1.18, 0.7, { seg: 48 });               // alas tier 2 (di bawah air)
-      basin(0.92, 1.08, 0.7, 1.22, M.granite);
+      basin(0.92, 1.08, 0.7, 1.22, floorC);
       B.torus(M.brass, 0, 1.22, 0, 1.0, 0.03, { rx: Math.PI / 2, ts: 72 });
       B.cyl(M.stoneLight, 0, 1.5, 0, 0.12, 0.22, 0.56, { seg: 24 });
-      basin(0.52, 0.62, 1.78, 2.0, M.stoneLight);
+      basin(0.52, 0.62, 1.78, 2.0, floorTop);
+      // nosel kuningan di bibir bak bawah
+      for (var nz = 0; nz < 8; nz++) {
+        var na = nz / 8 * Math.PI * 2;
+        B.cyl(M.brass, Math.cos(na) * NOZZLE_R, 0.64, Math.sin(na) * NOZZLE_R, 0.022, 0.03, 0.08, { seg: 10, rz: 0, rx: 0 });
+      }
       B.collider(0, 0, 5.5, 5.5, 0);
       B.shadow(M, 0, 0, 7.2, 7.2);
 
+      // ---- permukaan air: gelombang di vertex (riak dari titik jatuh semburan) ----
       var wn = W.tf.waterNormal(); wn.repeat.set(3, 3);
-      var water = new T.MeshStandardMaterial({
-        color: 0x1d5f7a, roughness: 0.12, metalness: 0, normalMap: wn, normalScale: new T.Vector2(0.45, 0.45),
-        envMapIntensity: 0.75, transparent: true, opacity: 0.95
+      var waterU = { uTime: { value: 0 } };
+      var transmissive = false;          // transmission = render ulang seluruh scene per frame → terlalu mahal
+      function waterMat(impacts, amp) {
+        var o = {
+          color: 0x2b6f80, roughness: 0.04, metalness: 0, normalMap: wn, normalScale: new T.Vector2(0.35, 0.35),
+          envMapIntensity: 1.0, ior: 1.333, specularIntensity: 1
+        };
+        if (transmissive) {
+          o.color = 0xffffff; o.transmission = 1; o.thickness = 0.45;
+          o.attenuationColor = new T.Color(0x1f7c86); o.attenuationDistance = 0.55;
+        } else { o.transparent = true; o.depthWrite = false; }
+        var m = new T.MeshPhysicalMaterial(o);
+        m.onBeforeCompile = function (sh) {
+          Object.assign(sh.uniforms, waterU);
+          var waveFn = [
+            'uniform float uTime;',
+            'float waveH(vec2 p){',
+            '  float h = 0.0;',
+            impacts ? '  for (int i = 0; i < 8; i++) { float a = float(i) * 0.7853982; vec2 c = vec2(cos(a), sin(a)) * ' + IMPACT_R.toFixed(3) + ';' +
+              ' float d = length(p - c); h += 0.011 * sin(d * 30.0 - uTime * 10.0) * exp(-d * 2.4); }' : '',
+            '  h += 0.004 * sin(dot(p, vec2(3.1, 1.7)) * 2.0 + uTime * 1.3) + 0.003 * sin(dot(p, vec2(-1.3, 2.9)) * 2.6 - uTime * 1.7);',
+            '  return h * ' + amp.toFixed(2) + ';',
+            '}'].join('\n');
+          sh.vertexShader = waveFn + '\n' + sh.vertexShader
+            .replace('#include <beginnormal_vertex>', [
+              'float eW = 0.03;',
+              'float hx = waveH(position.xz + vec2(eW, 0.0)) - waveH(position.xz - vec2(eW, 0.0));',
+              'float hz = waveH(position.xz + vec2(0.0, eW)) - waveH(position.xz - vec2(0.0, eW));',
+              'vec3 objectNormal = normalize(vec3(-hx / (2.0 * eW), 1.0, -hz / (2.0 * eW)));',
+              '#ifdef USE_TANGENT', 'vec3 objectTangent = vec3(tangent.xyz);', '#endif'].join('\n'))
+            .replace('#include <begin_vertex>', 'vec3 transformed = vec3(position); transformed.y += waveH(position.xz);');
+          sh.fragmentShader = 'uniform float uTime;\n' + sh.fragmentShader.replace(
+            'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
+            'vec3 mapA = texture2D( normalMap, vNormalMapUv + uTime * vec2( 0.021, 0.013 ) ).xyz * 2.0 - 1.0;\n' +
+            '\tvec3 mapB = texture2D( normalMap, vNormalMapUv * 1.63 - uTime * vec2( 0.017, -0.026 ) ).xyz * 2.0 - 1.0;\n' +
+            '\tvec3 mapN = normalize( vec3( mapA.xy + mapB.xy, mapA.z * mapB.z ) );');
+          if (!transmissive) {
+            // tanpa refraksi: transparansi mengikuti Fresnel (jernih dilihat dari atas, memantul di sudut miring)
+            sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>',
+              '#include <opaque_fragment>\n\tfloat fresW = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);\n' +
+              '\tgl_FragColor.a = mix(0.62, 0.97, fresW);');
+          }
+        };
+        m.customProgramCacheKey = function () { return 'water' + (impacts ? 'I' : 'C') + amp + transmissive; };
+        m.userData.noAO = true;
+        return m;
+      }
+      var waterLow = waterMat(true, 1), waterUp = waterMat(false, 0.5);
+      [[1.1, 2.5, 0.47, waterLow], [0, 0.92, 1.15, waterUp], [0, 0.52, 1.95, waterUp]].forEach(function (d) {
+        var g = d[0] > 0 ? new T.RingGeometry(d[0], d[1], 128, 24) : new T.CircleGeometry(d[1], 64);
+        g.rotateX(-Math.PI / 2);
+        var m = new T.Mesh(g, d[3]); m.position.y = d[2]; m.userData.noAO = true; m.renderOrder = 1;
+        W.root.add(m);
       });
-      water.onBeforeCompile = function (shader) {
-        shader.uniforms.uTime = { value: 0 };
-        water.userData.shader = shader;
-        shader.fragmentShader = 'uniform float uTime;\n' + shader.fragmentShader.replace(
-          'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
-          'vec3 mapA = texture2D( normalMap, vNormalMapUv + uTime * vec2( 0.021, 0.013 ) ).xyz * 2.0 - 1.0;\n' +
-          '\tvec3 mapB = texture2D( normalMap, vNormalMapUv * 1.63 - uTime * vec2( 0.017, -0.026 ) ).xyz * 2.0 - 1.0;\n' +
-          '\tvec3 mapN = normalize( vec3( mapA.xy + mapB.xy, mapA.z * mapB.z ) );');
-      };
-      [[2.5, 0.47], [0.92, 1.15], [0.52, 1.95]].forEach(function (d) {
-        var g = new T.CircleGeometry(d[0], 64); g.rotateX(-Math.PI / 2);
-        var m = new T.Mesh(g, water); m.position.y = d[1]; W.root.add(m);
-      });
-      W.ticks.push(function (t) { if (water.userData.shader) water.userData.shader.uniforms.uTime.value = t; });
+      W.ticks.push(function (t) { waterU.uTime.value = t; causticU.uTime.value = t; });
+      W.fountainCaustic = causticU.uCaustic;
 
       if (!Q.jets) return;
-      // semburan: tetesan instanced di lintasan parabola dari 8 nosel ke tengah + air terjun tier atas
-      var drops = new T.InstancedMesh(new T.SphereGeometry(0.035, 6, 4),
-        new T.MeshBasicMaterial({ color: 0xe6f6ff, transparent: true, opacity: 0.75 }), 8 * 14 + 40);
-      drops.frustumCulled = false;
-      W.root.add(drops);
-      var m4 = new T.Matrix4(), v = new T.Vector3(), sc = new T.Vector3();
-      W.ticks.push(function (t) {
-        var i = 0;
-        for (var j = 0; j < 8; j++) {
-          var a = j / 8 * Math.PI * 2, sx = Math.cos(a) * 2.35, sz = Math.sin(a) * 2.35;
-          for (var k = 0; k < 14; k++) {
-            var p = ((t * 0.55 + k / 14 + j * 0.13) % 1);
-            v.set(lerp(sx, sx * 0.45, p), 0.55 + Math.sin(p * Math.PI) * 1.05, lerp(sz, sz * 0.45, p));
-            var s2 = 0.7 + Math.sin(p * Math.PI) * 0.6; sc.set(s2, s2 * 1.4, s2);
-            m4.compose(v, drops.quaternion, sc); drops.setMatrixAt(i++, m4);
-          }
-        }
-        for (var q = 0; q < 40; q++) {
-          var ang = q / 40 * Math.PI * 2 + t * 0.2, pr = ((t * 0.9 + q * 0.37) % 1);
-          v.set(Math.cos(ang) * 0.6, 1.99 - pr * 0.75, Math.sin(ang) * 0.6);
-          sc.set(0.6, 2.2, 0.6); m4.compose(v, drops.quaternion, sc); drops.setMatrixAt(i++, m4);
-        }
-        drops.instanceMatrix.needsUpdate = true;
+      buildFountainParticles(IMPACT_R, NOZZLE_R);
+    }
+
+    // ---- partikel air di GPU: semburan parabola, cipratan, kabut, air terjun, bubbler ----
+    function buildFountainParticles(IMPACT_R, NOZZLE_R) {
+      var k = Q.name === 'high' ? 1 : 0.55;
+      var spec = [[0, 8, Math.round(110 * k)], [1, 8, Math.round(36 * k)], [2, 8, 5], [3, 1, Math.round(340 * k)], [4, 1, Math.round(90 * k)]];
+      var data = [], rnd = mulberry32(77);
+      spec.forEach(function (sp) {
+        for (var src = 0; src < sp[1]; src++) for (var i = 0; i < sp[2]; i++) data.push(sp[0], src, (i + rnd() * 0.5) / sp[2], rnd());
       });
+      var n = data.length / 4, g = new T.BufferGeometry();
+      g.setAttribute('position', new T.BufferAttribute(new Float32Array(n * 3), 3));
+      g.setAttribute('aData', new T.BufferAttribute(new Float32Array(data), 4));
+      g.boundingSphere = new T.Sphere(new T.Vector3(0, 1, 0), 4);
+      var mat = new T.ShaderMaterial({
+        transparent: true, depthWrite: false,
+        uniforms: { uTime: { value: 0 }, uScale: { value: 400 }, uLight: { value: new T.Color(1, 1, 1) } },
+        vertexShader: [
+          'uniform float uTime; uniform float uScale;',
+          'attribute vec4 aData;',
+          'varying float vAlpha;',
+          'const float TAU = 6.2831853;',
+          'void main(){',
+          '  float type = aData.x, src = aData.y, r1 = aData.z, r2 = aData.w;',
+          '  float ang = src * TAU / 8.0; vec2 dir = vec2(cos(ang), sin(ang)), side = vec2(-dir.y, dir.x);',
+          '  vec3 S = vec3(dir.x * ' + NOZZLE_R.toFixed(2) + ', 0.66, dir.y * ' + NOZZLE_R.toFixed(2) + ');',
+          '  vec3 E = vec3(dir.x * ' + IMPACT_R.toFixed(2) + ', 0.47, dir.y * ' + IMPACT_R.toFixed(2) + ');',
+          '  vec3 p; float size = 0.03; vAlpha = 0.7;',
+          '  if (type < 0.5) {',                                   // semburan
+          '    float life = fract(uTime * 0.7 + r1);',
+          '    p = mix(S, E, life); p.y += 4.0 * 0.95 * life * (1.0 - life);',
+          '    p.xz += side * (r2 - 0.5) * 0.05 * life;',
+          '    p.y += (fract(r2 * 7.3) - 0.5) * 0.03 * life;',
+          '    size = mix(0.024, 0.04, life); vAlpha = 0.75;',
+          '  } else if (type < 1.5) {',                            // cipratan di titik jatuh
+          '    float life = fract(uTime * 1.7 + r1);',
+          '    float a = r2 * TAU; vec2 sd = vec2(cos(a), sin(a));',
+          '    p = E + vec3(sd.x, 0.0, sd.y) * (0.06 + 0.22 * life * fract(r2 * 13.1));',
+          '    p.y += 0.32 * (0.5 + fract(r2 * 5.7)) * 4.0 * life * (1.0 - life) * 0.5;',
+          '    size = 0.018; vAlpha = 0.8 * (1.0 - life);',
+          '  } else if (type < 2.5) {',                            // kabut halus
+          '    float life = fract(uTime * 0.22 + r1);',
+          '    p = E + vec3((r1 - 0.5) * 0.4, 0.05 + life * 0.45, (r2 - 0.5) * 0.4);',
+          '    size = 0.45 + life * 0.45; vAlpha = 0.035 * sin(life * 3.14159);',
+          '  } else if (type < 3.5) {',                            // air terjun dari bak atas
+          '    float life = fract(uTime * 1.25 + r2);',
+          '    float a = r1 * TAU + uTime * 0.05; vec2 sd = vec2(cos(a), sin(a));',
+          '    float rr = 0.61 + 0.1 * life + (fract(r2 * 11.0) - 0.5) * 0.02;',
+          '    p = vec3(sd.x * rr, 1.99 - 0.77 * life * life, sd.y * rr);',
+          '    size = 0.026; vAlpha = 0.55;',
+          '  } else {',                                            // bubbler di puncak
+          '    float life = fract(uTime * 1.1 + r1);',
+          '    float a = r2 * TAU; vec2 sd = vec2(cos(a), sin(a)) * (0.02 + 0.13 * life);',
+          '    p = vec3(sd.x, 2.0 + 0.5 * 4.0 * life * (1.0 - life), sd.y);',
+          '    size = 0.028; vAlpha = 0.7 * (1.0 - life * 0.6);',
+          '  }',
+          '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+          '  gl_Position = projectionMatrix * mv;',
+          '  gl_PointSize = clamp(size * uScale / -mv.z, 1.0, 96.0);',
+          '}'].join('\n'),
+        fragmentShader: [
+          'uniform vec3 uLight; varying float vAlpha;',
+          'void main(){',
+          '  vec2 c = gl_PointCoord - 0.5; float d = length(c) * 2.0;',
+          '  float a = smoothstep(1.0, 0.25, d) * vAlpha;',
+          '  if (a < 0.01) discard;',
+          '  vec3 col = uLight * (0.85 + 0.35 * (1.0 - d));',          // inti sedikit lebih terang
+          '  gl_FragColor = vec4(col, a);',
+          '  #include <tonemapping_fragment>',
+          '  #include <colorspace_fragment>',
+          '}'].join('\n')
+      });
+      var pts = new T.Points(g, mat);
+      pts.frustumCulled = false; pts.renderOrder = 3; pts.userData.noAO = true;
+      var sz = new T.Vector2();
+      pts.onBeforeRender = function (r, sc, cam) {
+        r.getDrawingBufferSize(sz);
+        mat.uniforms.uScale.value = sz.y * 0.5 * cam.projectionMatrix.elements[5];
+      };
+      W.root.add(pts);
+      W.fountainLight = mat.uniforms.uLight;
+      W.ticks.push(function (t) { mat.uniforms.uTime.value = t; });
     }
 
     // ---------- eskalator naik-turun ke jembatan utara (anak tangga bergerak) ----------
@@ -2580,6 +2716,21 @@
         ping: function (x, z) { var r = W.reticle; if (!r) return; r.pingPos.set(x, 0, z); r.pingT = 0; }
       },
       reflection: function () { return W.reflection || null; },
+      // jenis permukaan lantai di titik (x, z) → suara langkah kaki
+      surfaceAt: function (x, z) {
+        if (z > MALL.maxZ + 0.3) return 'paving';
+        if (z > MALL.maxZ - 2.6 && Math.abs(x) < 3.2) return 'carpet';           // keset di pintu masuk
+        for (var id in W.units) {
+          var u = W.units[id].u;
+          if (u.kind !== 'shop') continue;
+          if (Math.abs(x - u.cx) < u.dx / 2 && Math.abs(z - u.cz) < u.dz / 2) {
+            if (u.baseStatus !== 'rented') return 'concrete';
+            var f = (BRANDS[u.id] || {}).floor;
+            return f === 'wood' ? 'wood' : f === 'carpet' ? 'carpet' : 'marble';
+          }
+        }
+        return 'marble';
+      },
       stats: function () {
         var calls = renderer.info.render.calls, tris = renderer.info.render.triangles;
         return { calls: calls, triangles: tris, quality: Q.name, pixelRatio: renderer.getPixelRatio() };
