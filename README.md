@@ -63,8 +63,8 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
   dinding) dan dijadikan PMREM untuk cahaya tak langsung; tier high memakai dua pantulan
   (bounce). Pantulannya **box-projected** terhadap kotak koridor, jadi etalase & kios terpantul
   di posisi yang benar. Dihitung sekali untuk siang dan sekali untuk malam.
-- **Bayangan PCSS** (tier high): bayangan matahari tajam di dekat kaki objek dan melembut
-  makin jauh (contact-hardening), termasuk bayangan rangka skylight.
+- **Bayangan halus**: shadow map statis dengan filter bilinear lembut (PCF soft) di tier
+  medium & high — tepi bayangan rangka skylight dan kolom mulus tanpa efek tangga/pecah.
 - **Tekstur & tiling**: sampling stokastik (dua sampel offset acak yang dicampur mengikuti
   noise) menghilangkan pola berulang di granit, beton, plester, plafon, terrazzo; ubin marmer
   memilih salah satu dari 4 slab dan diputar 90°×n per ubin dengan variasi warna kecil (nat

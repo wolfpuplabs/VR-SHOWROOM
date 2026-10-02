@@ -9,12 +9,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<script src="mall-world.js?v=202610020706"></script>
-<script src="mall-sky.js?v=202610020706"></script>
-<script src="mall-audio.js?v=202610020706"></script>
+<script src="mall-world.js?v=202610020730"></script>
+<script src="mall-sky.js?v=202610020730"></script>
+<script src="mall-audio.js?v=202610020730"></script>
 <!-- modul contoh three.js (post-processing) memakai THREE milik A-Frame lewat shim -->
 <script type="importmap">{ "imports": { "three": "./vendor/three/three-shim.js" } }</script>
-<script type="module" src="mall-post.js?v=202610020706"></script>
+<script type="module" src="mall-post.js?v=202610020730"></script>
 <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 <style>
   :root{
@@ -1075,17 +1075,27 @@
   AFRAME.registerComponent('mall-controls', {
     // body.moving selama kamera berpindah (joystick, WASD, glide) → HUD meredup
     trackMotion: function (p, time) {
-      var m = this.motion || (this.motion = { x: p.x, z: p.z, until: 0, on: false, walked: 0, t: time });
-      var dist = Math.hypot(p.x - m.x, p.z - m.z), dt = Math.max(1, time - m.t);
+      var m = this.motion || (this.motion = { x: p.x, z: p.z, until: 0, on: false, t: time, speed: 0, phase: 0, walking: false });
+      var dist = Math.hypot(p.x - m.x, p.z - m.z), dt = Math.min(0.1, Math.max(0.001, (time - m.t) / 1000));
       if (dist > 0.002) m.until = time + 650;
-      // langkah kaki tiap ±0,72 m; lompatan besar (teleport) tidak dihitung
-      if (dist < 1) {
-        m.walked += dist;
-        if (m.walked > 0.72) {
-          m.walked = 0;
-          if (window.MallAudio && world && world.surfaceAt) MallAudio.step(world.surfaceAt(p.x, p.z), dist / dt * 1000);
+      // kecepatan dihaluskan; lompatan besar (teleport) dianggap berhenti
+      var v = dist < 1 ? dist / dt : 0;
+      m.speed += (v - m.speed) * Math.min(1, dt * 10);
+      // langkah kaki mengikuti kadens jalan alami (±2 langkah/detik, sedikit lebih cepat saat
+      // bergerak cepat), bukan jarak tempuh: langkah pertama langsung saat mulai, berhenti saat diam
+      if (m.speed > 0.35) {
+        var cadence = Math.min(2.7, 1.8 + m.speed * 0.2);
+        if (!m.walking) { m.walking = true; m.phase = 0.6; }
+        m.phase += dt * cadence;
+        if (m.phase >= 1) {
+          m.phase -= 1;
+          if (window.MallAudio && world && world.surfaceAt) MallAudio.step(world.surfaceAt(p.x, p.z), m.speed);
         }
-      } else m.walked = 0;
+      } else if (m.walking) {
+        // langkah penutup kalau berhenti di tengah ayunan
+        if (m.phase > 0.5 && window.MallAudio && world && world.surfaceAt) MallAudio.step(world.surfaceAt(p.x, p.z), 0.6);
+        m.walking = false; m.phase = 0;
+      }
       m.x = p.x; m.z = p.z; m.t = time;
       var on = time < m.until;
       if (on !== m.on) { m.on = on; document.body.classList.toggle('moving', on); }
