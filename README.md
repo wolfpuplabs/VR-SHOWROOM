@@ -52,6 +52,35 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
 - **Signage kanvas** untuk semua teks 3D (tajam, ikut ganti bahasa, tidak butuh font CDN A-Frame)
 - **Hidup**: tetesan air mancur, anak tangga eskalator bergerak, spanduk bergoyang, produk berputar,
   pin hotspot melayang
+- **Lingkungan luar 360° otomatis** (`mall-sky.js`): saat memuat, GPU merender panorama
+  equirectangular HDR — langit fisik (Preetham) dengan matahari, awan fbm yang diterangi
+  matahari, dua lapis siluet kota berjendela (menyala + lampu suar saat malam), deret pohon,
+  dan langit malam dengan bulan, bintang, serta pendar kota. Panorama yang sama menjadi latar
+  langit di skylight & pintu masuk **dan** HDRI untuk pencahayaan; dibuat ulang saat transisi
+  siang↔malam. Tidak ada foto yang diunduh.
+- **Global illumination (light probe)**: setelah mall selesai dibangun, seluruh scene dirender
+  ke cubemap dari koridor (matahari, langit HDR, lampu, signage menyala, pantulan lantai &
+  dinding) dan dijadikan PMREM untuk cahaya tak langsung; tier high memakai dua pantulan
+  (bounce). Pantulannya **box-projected** terhadap kotak koridor, jadi etalase & kios terpantul
+  di posisi yang benar. Dihitung sekali untuk siang dan sekali untuk malam.
+- **Bayangan PCSS** (tier high): bayangan matahari tajam di dekat kaki objek dan melembut
+  makin jauh (contact-hardening), termasuk bayangan rangka skylight.
+- **Tekstur & tiling**: sampling stokastik (dua sampel offset acak yang dicampur mengikuti
+  noise) menghilangkan pola berulang di granit, beton, plester, plafon, terrazzo; ubin marmer
+  memilih salah satu dari 4 slab dan diputar 90°×n per ubin dengan variasi warna kecil (nat
+  tetap lurus); normal mikro frekuensi tinggi untuk detail dari dekat; lantai kayu oak dengan
+  papan bersusun, serat & warna berbeda per papan, sambungan ujung, dan mata kayu.
+- **Air mancur**: permukaan air berdeformasi di vertex shader (riak dari 8 titik jatuh semburan
+  + ombak halus), normal detail bergerak, transparansi Fresnel, kaustik bergerak di dasar bak;
+  partikel GPU untuk semburan parabola dari nosel kuningan, cipratan, kabut, air terjun bak atas
+  dan bubbler.
+- **Suara** (`mall-audio.js`, WebAudio, tanpa berkas audio): loop air mancur yang disintesis
+  (desir + ratusan tetesan) diposisikan 3D (HRTF) di atrium, room tone halus, dan **langkah kaki**
+  yang mengikuti jenis lantai (marmer, kayu kafe, beton unit kosong, keset, paving luar). Mulai
+  setelah interaksi pertama; tombol 🔈 di toolbar untuk mematikan (diingat).
+- **Kafe Kopi Senja (A6)**: bar kopi dengan mesin espresso dua group, grinder, etalase pastry,
+  rak biji kopi, papan menu kapur dua bahasa, plafon bilah kayu, banquette kulit, meja bistro,
+  lampu pendant kuningan, neon OPEN, dan lampu hangat sendiri.
 - **Material PBR berlapis** (tier medium/high, `MeshPhysicalMaterial`): marmer lantai dengan
   urat *domain-warped* dua skala, dasar *honed* + lapisan **clearcoat** poles yang kilapnya
   dipecah peta noda/bekas pel (juga memecah pola ubin yang berulang); granit & terrazzo poles
@@ -193,6 +222,8 @@ index.html                     redirect ke mall.html
 mall.html                      data, UI, leasing, product showcase, navigasi
 mall-world.js                  renderer 3D: material, pencahayaan, arsitektur, toko, FX
 mall-post.js                   post-processing (ES module): GTAO, bloom, grading sinematik
+mall-sky.js                    panorama 360° HDR otomatis (langit, awan, kota) → latar + HDRI
+mall-audio.js                  suara air mancur 3D, langkah kaki, room tone (WebAudio)
 vendor/three/                  pass post-processing three.js (MIT) + shim ke THREE milik A-Frame
 assets/Porsche 356B.glb        mobil showroom unit A4 (web + AR Android)
 assets/products/*.glb          model produk tenant (web + AR Android)
@@ -200,6 +231,6 @@ assets/products/*.usdz         versi AR Quick Look untuk iPhone/iPad
 assets/Porsche 356B.usdz       versi AR Quick Look (bertekstur) untuk mobil showroom
 _headers                       MIME type .usdz/.glb untuk Netlify / Cloudflare Pages
 tools/generate-product-models.py  generator model produk (trimesh)
-tools/glb-to-usdz.py              konverter .glb -> .usdz (usd-core)
+tools/glb-to-usdz.py              konverter .glb -> .usdz (usd-core); GLB bertekstur ikut membawa teksturnya
 .github/workflows/auto-merge.yml  auto-merge PR ke main
 ```
