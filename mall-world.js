@@ -19,7 +19,7 @@
     // bayangan matahari/bulan dirender sekali ke shadow map statis (hanya dihitung ulang
     // saat siang↔malam berganti), jadi cukup murah untuk tablet
     low:    { name: 'low',    pixelRatio: 1,   tex: 512,  floorTex: 1024, shadows: false, shadowSize: 0,    softShadows: false, points: 1, flora: 0.5, shafts: false, jets: false, aniso: 2, reflect: 0 },
-    medium: { name: 'medium', pixelRatio: 1.5, tex: 512,  floorTex: 1024, shadows: true,  shadowSize: 2048, softShadows: false, points: 2, flora: 1,   shafts: true,  jets: true,  aniso: 4, reflect: 0 },
+    medium: { name: 'medium', pixelRatio: 1.5, tex: 512,  floorTex: 1024, shadows: true,  shadowSize: 2048, softShadows: true, points: 2, flora: 1,   shafts: true,  jets: true,  aniso: 4, reflect: 0 },
     high:   { name: 'high',   pixelRatio: 2,   tex: 1024, floorTex: 2048, shadows: true,  shadowSize: 4096, softShadows: true,  points: 4, flora: 1,   shafts: true,  jets: true,  aniso: 8, reflect: 0.5 }
   };
 
@@ -973,8 +973,9 @@
       if (Q.shadows) {
         sun.castShadow = true;
         sun.shadow.mapSize.set(Q.shadowSize, Q.shadowSize);
-        sun.shadow.bias = -0.00025;
-        sun.shadow.normalBias = Q.shadowSize >= 4096 ? 0.02 : 0.035;
+        // normalBias cukup besar supaya tidak ada "jerawat" bayangan bertangga di kolom silinder
+        sun.shadow.bias = Q.shadowSize >= 4096 ? -0.0003 : -0.0005;
+        sun.shadow.normalBias = Q.shadowSize >= 4096 ? 0.03 : 0.06;
         sun.shadow.radius = 2;
       }
       W.root.add(sun); W.root.add(sun.target);
@@ -1090,42 +1091,6 @@
       W.pins.forEach(function (p, i) { if (p.sprite) p.sprite.visible = pins[i]; });
       scene.remove(cam); cubeRT.dispose(); pmrem.dispose();
       return probe.texture;
-    }
-
-    // PCSS: bayangan matahari tajam di dekat kaki objek dan melembut makin jauh
-    // (contact-hardening), seperti bayangan sungguhan. Hanya tier high.
-    function installPCSS() {
-      if (!Q.softShadows || T.ShaderChunk.shadowmap_pars_fragment.indexOf('pcssShadow') >= 0) return;
-      var sc = W.sun.shadow.camera;
-      var frustum = Math.max(sc.right - sc.left, sc.top - sc.bottom), range = sc.far - sc.near;
-      var f = function (v) { return v.toFixed(6); };
-      var code = [
-        '#define PCSS_RANGE ' + f(range),
-        '#define PCSS_FRUSTUM ' + f(frustum),
-        '#define PCSS_SUN_TAN 0.022',                                      // ±1,3° (matahari + difusi kaca skylight)
-        '#define PCSS_MAX_UV ' + f(0.9 / frustum),
-        '#define PCSS_MIN_UV ' + f(1.6 / Q.shadowSize),
-        'vec2 pcssDisk(int i, float n, float rot){ float r = sqrt((float(i) + 0.5) / n); float a = float(i) * 2.399963 + rot; return vec2(cos(a), sin(a)) * r; }',
-        'float pcssShadow(sampler2D map, vec4 c){',
-        '  float rot = rand(gl_FragCoord.xy) * 6.283185;',
-        '  float zR = c.z, sum = 0.0, nb = 0.0;',
-        '  for (int i = 0; i < 12; i++) {',
-        '    float d = unpackRGBAToDepth(texture2D(map, c.xy + pcssDisk(i, 12.0, rot) * PCSS_MAX_UV));',
-        '    if (d < zR) { sum += d; nb += 1.0; }',
-        '  }',
-        '  if (nb < 0.5) return 1.0;',
-        '  float zB = sum / nb;',
-        '  float r = clamp((zR - zB) * PCSS_RANGE * PCSS_SUN_TAN / PCSS_FRUSTUM, PCSS_MIN_UV, PCSS_MAX_UV);',
-        '  float lit = 0.0;',
-        '  for (int i = 0; i < 20; i++) lit += step(zR, unpackRGBAToDepth(texture2D(map, c.xy + pcssDisk(i, 20.0, rot + 1.3) * r)));',
-        '  return lit / 20.0;',
-        '}',
-        ''
-      ].join('\n');
-      var chunk = T.ShaderChunk.shadowmap_pars_fragment;
-      chunk = chunk.replace('#ifdef USE_SHADOWMAP', '#ifdef USE_SHADOWMAP\n' + code);
-      chunk = chunk.replace('#if defined( SHADOWMAP_TYPE_PCF )', 'return pcssShadow( shadowMap, shadowCoord );\n\t\t#if defined( SHADOWMAP_TYPE_PCF )');
-      T.ShaderChunk.shadowmap_pars_fragment = chunk;
     }
 
     // Box-projected (parallax-corrected) environment: pantulan probe dikoreksi terhadap kotak
@@ -2903,7 +2868,6 @@
         W.B.flush(W.root, Q.shadows);
         buildFloorReflection();
         fitShadow();
-        installPCSS();
         if (W.pano) {
           installBoxProjection(new T.Vector3(0, 3.2, 4.5));
           // semua material PBR: simpan envMapIntensity asli → diskalakan applyTOD
