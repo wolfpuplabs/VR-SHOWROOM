@@ -10,6 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="mall-world.js"></script>
+<script src="mall-sky.js"></script>
+<script src="mall-audio.js"></script>
 <!-- modul contoh three.js (post-processing) memakai THREE milik A-Frame lewat shim -->
 <script type="importmap">{ "imports": { "three": "./vendor/three/three-shim.js" } }</script>
 <script type="module" src="mall-post.js"></script>
@@ -171,6 +173,9 @@
   .quality{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--muted)}
   .btn.icon{display:grid;place-items:center;padding:7px 10px}
   #btn-tod .i-moon{display:none}
+  #btn-sound .i-off{display:none}
+  body.muted #btn-sound .i-on{display:none}
+  body.muted #btn-sound .i-off{display:block}
   body.is-night #btn-tod .i-sun{display:none}
   body.is-night #btn-tod .i-moon{display:block}
   .quality .seg button{padding:6px 10px}
@@ -341,6 +346,10 @@
       <button class="tb" id="btn-tod" data-i18n-title="tod.toggle" title="Day / Night">
         <svg class="i-sun" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>
         <svg class="i-moon" viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>
+      </button>
+      <button class="tb" id="btn-sound" data-i18n-title="sound.toggle" title="Sound">
+        <svg class="i-on" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.2 6.5a7.6 7.6 0 0 1 0 11"/></svg>
+        <svg class="i-off" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
       </button>
       <div class="seg" id="langseg">
         <button data-lang="en" aria-pressed="true">EN</button>
@@ -565,7 +574,7 @@
       'hint.booked': 'Reserved by you — click for details',
       'hint.rented': 'Leased to {tenant} — click for details',
       'hint.product': '{name} · {price} — click for 3D & AR',
-      'hint.showroom': 'Open the Porsche showroom (other page)',
+      'hint.showroom': 'View the Porsche 356B in 3D & AR',
       'hint.directory': '<b>Directory</b> — click to browse every space',
       'hint.leasing': '<b>Leasing office</b> — click to see available spaces',
       'load.lighting': 'Setting up lighting…', 'load.materials': 'Baking materials…',
@@ -574,6 +583,7 @@
       'q.label': 'Graphics', 'q.auto': 'Auto', 'q.low': 'Low', 'q.medium': 'Medium', 'q.high': 'High',
       'q.active': 'running: {q}',
       'tod.label': 'Lighting', 'tod.auto': 'Auto (clock)', 'tod.day': 'Day', 'tod.night': 'Night',
+      'sound.toggle': 'Sound on / off', 'toast.soundOn': 'Sound on', 'toast.soundOff': 'Sound off',
       'tod.toggle': 'Switch day / night', 'toast.day': 'Daytime lighting', 'toast.night': 'Night lighting',
       'toast.teleport': 'Moved to the front of <b>{name}</b>',
       'toast.moved': 'Moved to {x}, {z}',
@@ -593,7 +603,7 @@
       'w3.size': 'Size', 'w3.rent': 'Rent', 'w3.bestFor': 'Best for', 'w3.perMonth': '/ MONTH',
       'w3.tapToRent': 'Tap the glass to rent', 'w3.tapDetails': 'Tap for booking details',
       'w3.readyFitOut': 'Ready to fit out', 'w3.openingSoon': 'Opening soon', 'w3.cashier': 'Cashier',
-      'w3.openShowroom': 'OPEN VR SHOWROOM', 'w3.blockA': 'BLOCK A', 'w3.blockB': 'BLOCK B',
+      'w3.openShowroom': 'VIEW CAR IN AR', 'w3.cafeCoffee': 'COFFEE', 'w3.cafeOther': 'NON-COFFEE & PASTRY', 'w3.open': 'OPEN', 'w3.blockA': 'BLOCK A', 'w3.blockB': 'BLOCK B',
       'w3.escalator': 'LEVEL 2 · ESCALATOR', 'w3.exit': 'EXIT', 'w3.spacesAvail': 'spaces available', 'w3.from': 'from',
       'w3.directory': 'DIRECTORY', 'w3.groundFloor': 'Ground floor', 'w3.youAreHere': 'You are here',
       'w3.legendAvail': 'Available', 'w3.legendRes': 'Reserved', 'w3.legendLeased': 'Leased',
@@ -656,7 +666,7 @@
       'hint.booked': 'Dipesan olehmu — klik untuk detail',
       'hint.rented': 'Disewa {tenant} — klik untuk detail',
       'hint.product': '{name} · {price} — klik untuk 3D & AR',
-      'hint.showroom': 'Buka showroom Porsche (halaman lain)',
+      'hint.showroom': 'Lihat Porsche 356B dalam 3D & AR',
       'hint.directory': '<b>Direktori</b> — klik untuk melihat semua space',
       'hint.leasing': '<b>Kantor leasing</b> — klik untuk melihat space yang tersedia',
       'load.lighting': 'Menyiapkan pencahayaan…', 'load.materials': 'Membuat material…',
@@ -665,6 +675,7 @@
       'q.label': 'Grafis', 'q.auto': 'Otomatis', 'q.low': 'Rendah', 'q.medium': 'Sedang', 'q.high': 'Tinggi',
       'q.active': 'berjalan: {q}',
       'tod.label': 'Pencahayaan', 'tod.auto': 'Otomatis (jam)', 'tod.day': 'Siang', 'tod.night': 'Malam',
+      'sound.toggle': 'Suara nyala / mati', 'toast.soundOn': 'Suara menyala', 'toast.soundOff': 'Suara dimatikan',
       'tod.toggle': 'Ganti siang / malam', 'toast.day': 'Pencahayaan siang', 'toast.night': 'Pencahayaan malam',
       'toast.teleport': 'Kamu dipindahkan ke depan <b>{name}</b>',
       'toast.moved': 'Berpindah ke titik {x}, {z}',
@@ -684,7 +695,7 @@
       'w3.size': 'Luas', 'w3.rent': 'Sewa', 'w3.bestFor': 'Cocok untuk', 'w3.perMonth': '/ BULAN',
       'w3.tapToRent': 'Ketuk kaca untuk menyewa', 'w3.tapDetails': 'Ketuk untuk detail pesanan',
       'w3.readyFitOut': 'Siap renovasi', 'w3.openingSoon': 'Segera dibuka', 'w3.cashier': 'Kasir',
-      'w3.openShowroom': 'BUKA SHOWROOM VR', 'w3.blockA': 'BLOK A', 'w3.blockB': 'BLOK B',
+      'w3.openShowroom': 'LIHAT MOBIL DI AR', 'w3.cafeCoffee': 'KOPI', 'w3.cafeOther': 'NON-KOPI & PASTRY', 'w3.open': 'BUKA', 'w3.blockA': 'BLOK A', 'w3.blockB': 'BLOK B',
       'w3.escalator': 'LANTAI 2 · ESKALATOR', 'w3.exit': 'KELUAR', 'w3.spacesAvail': 'space tersedia', 'w3.from': 'mulai',
       'w3.directory': 'DIREKTORI', 'w3.groundFloor': 'Lantai dasar', 'w3.youAreHere': 'Anda di sini',
       'w3.legendAvail': 'Tersedia', 'w3.legendRes': 'Dipesan', 'w3.legendLeased': 'Disewa',
@@ -1051,7 +1062,7 @@
       onHover: onWorldHover,
       onUnitClick: guarded(function (u) { openUnit(u.id); }),
       onProductClick: guarded(function (pr) { openProduct(pr.id); }),
-      onShowroom: guarded(function () { window.location.href = 'index.html'; }),
+      onShowroom: guarded(function () { openProduct('P-A4-1'); }),   // mobil ukuran asli → panel produk + AR
       onDirectory: guarded(function () { openSidebar('spaces', 'all'); }),
       onLeasing: guarded(function () { openSidebar('spaces', 'available'); }),
       progress: progress
@@ -1064,9 +1075,18 @@
   AFRAME.registerComponent('mall-controls', {
     // body.moving selama kamera berpindah (joystick, WASD, glide) → HUD meredup
     trackMotion: function (p, time) {
-      var m = this.motion || (this.motion = { x: p.x, z: p.z, until: 0, on: false });
-      if (Math.abs(p.x - m.x) + Math.abs(p.z - m.z) > 0.002) m.until = time + 650;
-      m.x = p.x; m.z = p.z;
+      var m = this.motion || (this.motion = { x: p.x, z: p.z, until: 0, on: false, walked: 0, t: time });
+      var dist = Math.hypot(p.x - m.x, p.z - m.z), dt = Math.max(1, time - m.t);
+      if (dist > 0.002) m.until = time + 650;
+      // langkah kaki tiap ±0,72 m; lompatan besar (teleport) tidak dihitung
+      if (dist < 1) {
+        m.walked += dist;
+        if (m.walked > 0.72) {
+          m.walked = 0;
+          if (window.MallAudio && world && world.surfaceAt) MallAudio.step(world.surfaceAt(p.x, p.z), dist / dt * 1000);
+        }
+      } else m.walked = 0;
+      m.x = p.x; m.z = p.z; m.t = time;
       var on = time < m.until;
       if (on !== m.on) { m.on = on; document.body.classList.toggle('moving', on); }
     },
@@ -1133,6 +1153,12 @@
       var dt = Math.min(delta || 16, 60) / 1000;
       var prev = this.prev;
       this.trackMotion(p, time);
+      if (window.MallAudio && MallAudio.isStarted()) {
+        var o3 = this.el.object3D, A = this.audioTmp || (this.audioTmp = { p: new THREE.Vector3(), f: new THREE.Vector3(), u: new THREE.Vector3() });
+        o3.getWorldPosition(A.p); o3.getWorldDirection(A.f).negate();
+        A.u.set(0, 1, 0).applyQuaternion(o3.getWorldQuaternion(this.audioQ || (this.audioQ = new THREE.Quaternion())));
+        MallAudio.updateListener(A.p, A.f, A.u);
+      }
 
       // gerak joystick (mobile)
       if (window.JOY.x || window.JOY.y) {
@@ -1847,7 +1873,22 @@
       new MutationObserver(sync).observe(panel, { attributes: true, attributeFilter: ['class'] });
       sync();
     });
-    $('#btn-enter').addEventListener('click', function () { $('#welcome').style.display = 'none'; });
+    $('#btn-enter').addEventListener('click', function () { $('#welcome').style.display = 'none'; startAudio(); });
+
+    // audio baru boleh mulai setelah interaksi pertama (aturan autoplay browser)
+    function startAudio() { if (window.MallAudio) MallAudio.start(); }
+    ['pointerdown', 'keydown', 'touchend'].forEach(function (evt) {
+      window.addEventListener(evt, function first() { startAudio(); window.removeEventListener(evt, first, true); }, true);
+    });
+    function syncSound() { document.body.classList.toggle('muted', !!(window.MallAudio && MallAudio.isMuted())); }
+    $('#btn-sound').addEventListener('click', function () {
+      if (!window.MallAudio) return;
+      startAudio();
+      MallAudio.setMuted(!MallAudio.isMuted());
+      syncSound();
+      toast(t(MallAudio.isMuted() ? 'toast.soundOff' : 'toast.soundOn'));
+    });
+    syncSound();
     $('#btn-export').addEventListener('click', exportBookings);
     $('#btn-reset').addEventListener('click', resetBookings);
     $('#search').addEventListener('input', function (e) { searchTerm = e.target.value; renderList(); });

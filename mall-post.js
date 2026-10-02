@@ -79,8 +79,8 @@ const GradeShader = {
 
 // nilai grading & bloom untuk siang (0) dan malam (1)
 const LOOK = {
-  day:   { contrast: 0.32, sat: 1.08, vignette: 0.26, shadow: [-0.004, 0.01, 0.028], high: [0.03, 0.014, -0.012], bloom: 0.12, threshold: 3.2, radius: 0.3 },
-  night: { contrast: 0.36, sat: 1.06, vignette: 0.3, shadow: [0.0, 0.008, 0.045], high: [0.035, 0.018, 0.0], bloom: 0.2, threshold: 2.2, radius: 0.35 }
+  day:   { contrast: 0.32, sat: 1.08, vignette: 0.26, shadow: [-0.004, 0.01, 0.028], high: [0.03, 0.014, -0.012], bloom: 0.16, threshold: 2.6, radius: 0.4 },
+  night: { contrast: 0.36, sat: 1.06, vignette: 0.3, shadow: [0.0, 0.008, 0.045], high: [0.035, 0.018, 0.0], bloom: 0.3, threshold: 1.6, radius: 0.42 }
 };
 
 function lerp(a, b, t) { return a + (b - a) * t; }

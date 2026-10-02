@@ -191,7 +191,7 @@
   // granit gelap untuk apron etalase & lantai showroom
   TextureFactory.prototype.granite = function () {
     var N = new TileNoise(5), rnd = mulberry32(99);
-    var S = Math.min(this.Q.tex, 512);
+    var S = Math.min(this.Q.tex, this.Q.name === 'high' ? 1024 : 512);
     var speck = new Float32Array(S * S);
     for (var i = 0; i < S * S * 0.06; i++) speck[(rnd() * S * S) | 0] = rnd();
     return this.bake('granite', S, this.Q.tex, function (u, v, o) {
@@ -203,24 +203,43 @@
     }, 1.2);
   };
 
-  // kayu oak papan (lantai toko, booth, bangku)
+  // kayu oak papan: 6 baris papan per tile, sambungan ujung bersusun acak (staggered),
+  // warna & serat berbeda tiap papan, sesekali mata kayu
   TextureFactory.prototype.wood = function () {
-    var N = new TileNoise(7), N2 = new TileNoise(71);
-    var S = Math.min(this.Q.tex, 512);
+    var N = new TileNoise(7), N2 = new TileNoise(71), N3 = new TileNoise(113);
+    var S = Math.min(this.Q.tex, this.Q.name === 'high' ? 1024 : 512);
+    var ROWS = 6, rowRnd = mulberry32(5150), rows = [];
+    for (var r = 0; r < ROWS; r++) {
+      // tiap baris: satu sambungan ujung di posisi acak → papan sepanjang satu tile, bersusun
+      var j = 0.08 + rowRnd() * 0.84;
+      rows.push({ joints: [j, j], tones: [rowRnd(), rowRnd(), rowRnd()], knot: rowRnd() < 0.5 ? [rowRnd(), rowRnd()] : null });
+    }
     return this.bake('wood', S, this.Q.tex, function (u, v, o) {
-      var plank = Math.floor(v * 6);
-      var pv = (v * 6) % 1;
-      var seam = pv < 0.02 || pv > 0.98;
-      var grain = N.fbm(u * 0.25 + plank * 0.37, v * 6 * 0.18, 16, 4);
-      var rings = Math.sin((grain * 22 + v * 60 + plank * 3.1)) * 0.5 + 0.5;
-      var tone = N2.fbm(u, v, 2, 2) * 0.3 + (plank % 3) * 0.05;
-      var r = 150 + rings * 38 + tone * 60, g = 104 + rings * 28 + tone * 40, b = 64 + rings * 16 + tone * 22;
-      if (seam) { r *= 0.55; g *= 0.55; b *= 0.55; }
-      o.r = r; o.g = g; o.b = b;
-      o.h = seam ? 0 : 0.5 + rings * 0.04;
-      o.rough = seam ? 0.9 : 0.45 + rings * 0.12;
-    }, 2.5);
+      var ri = Math.floor(v * ROWS), row = rows[ri], pv = (v * ROWS) % 1;
+      var a = Math.min(row.joints[0], row.joints[1]), b = Math.max(row.joints[0], row.joints[1]);
+      var seg = u < a ? 0 : u < b ? 1 : 2, tone = row.tones[seg === 2 ? 0 : seg];   // segmen 2 menyambung ke segmen 0 tile berikutnya
+      var du = Math.min(Math.abs(u - a), Math.abs(u - b));
+      var seam = pv < 0.018 || pv > 0.982, joint = du < 0.0025;
+      // serat memanjang + cincin tahun, digeser per papan
+      var gu = u + tone * 7.3, warp = N.fbm(gu * 0.5, v * 2.0 + ri * 0.31, 6, 4);
+      var grain = Math.sin((pv * 5.0 + warp * 3.2 + tone * 20.0) * Math.PI) * 0.5 + 0.5;
+      var fine = N3.fbm(u * 0.25 + tone, v * 8.0, 32, 3);
+      var knot = 0;
+      if (row.knot) {
+        var kx = (u - row.knot[0]) * 7.0, ky = (pv - row.knot[1] * 0.6 - 0.2) * 1.6, kd = Math.sqrt(kx * kx + ky * ky);
+        knot = Math.max(0, 1 - kd * 3.2);
+        grain = mix01(grain, Math.sin(kd * 40.0) * 0.5 + 0.5, Math.max(0, 1 - kd * 1.4));
+      }
+      var base = 0.55 + tone * 0.45, var2 = N2.fbm(u, v, 3, 3) * 0.25;
+      var r0 = (130 + grain * 24 + fine * 26) * base + var2 * 60, g0 = (88 + grain * 25 + fine * 18) * base + var2 * 38, b0 = (54 + grain * 14 + fine * 10) * base + var2 * 20;
+      r0 *= 1 - knot * 0.45; g0 *= 1 - knot * 0.5; b0 *= 1 - knot * 0.5;
+      if (seam || joint) { r0 *= 0.5; g0 *= 0.5; b0 *= 0.5; }
+      o.r = r0; o.g = g0; o.b = b0;
+      o.h = seam || joint ? 0 : 0.5 + grain * 0.035 + fine * 0.03 - knot * 0.04;
+      o.rough = seam || joint ? 0.9 : 0.42 + grain * 0.1 + fine * 0.12;
+    }, 2.8);
   };
+  function mix01(a, b, t) { return a + (b - a) * t; }
 
   // terrazzo krem dengan serpih warna (serpih di tepi digambar ulang di sisi seberang → tileable)
   TextureFactory.prototype.terrazzo = function () {
@@ -267,7 +286,7 @@
   // beton poles (unit kosong) & plester dinding
   TextureFactory.prototype.concrete = function () {
     var N = new TileNoise(3), rnd = mulberry32(5);
-    var S = Math.min(this.Q.tex, 512);
+    var S = Math.min(this.Q.tex, this.Q.name === 'high' ? 1024 : 512);
     var pores = new Float32Array(S * S);
     for (var i = 0; i < S * S * 0.004; i++) pores[(rnd() * S * S) | 0] = 1;
     return this.bake('concrete', S, this.Q.tex, function (u, v, o) {
@@ -298,6 +317,16 @@
       o.r = o.g = o.b = 200 + s * 40;
       o.h = s * 0.2; o.rough = 0.25 + s * 0.2;
     }, 0.4);
+  };
+
+  // normal mikro (pori, butir halus) untuk dilihat dari dekat; dipakai di atas normal map utama
+  TextureFactory.prototype.detailNormal = function () {
+    if (this.cache.detailN) return this.cache.detailN;
+    var N = new TileNoise(131), S = 256, h = new Float32Array(S * S), rnd = mulberry32(9);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) h[y * S + x] = N.fbm(x / S, y / S, 16, 4) + rnd() * 0.08;
+    var t = this.tex(heightToNormal(h, S, 2.2), false);
+    this.cache.detailN = t;
+    return t;
   };
 
   // noda poles/bekas pel untuk clearcoatRoughnessMap: nilai rendah = kilap cermin
@@ -413,6 +442,64 @@
     return t;
   };
 
+  /* ====================== anti-tiling + detail mikro ======================= */
+  // mode 'stochastic': dua sampel dengan offset acak yang berganti mulus mengikuti noise
+  //   (teknik "texture repetition" Inigo Quilez) → pola tile tidak terlihat berulang.
+  // mode 'tiles': untuk ubin marmer bernat — tiap ubin memilih salah satu dari 4 ubin
+  //   di tekstur, diputar 90°×n, dan diberi variasi warna kecil; nat tetap lurus.
+  // detail: normal mikro frekuensi tinggi ditumpuk di atas normal map utama.
+  var AT_GLSL = [
+    'float atHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+    'float atNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+    '  return mix(mix(atHash(i), atHash(i + vec2(1, 0)), f.x), mix(atHash(i + vec2(0, 1)), atHash(i + vec2(1, 1)), f.x), f.y); }',
+    'vec4 atSample(sampler2D s, vec2 uv){',
+    '  float l = atNoise(uv * 0.37) * 8.0; float ia = floor(l), f = fract(l);',
+    '  vec2 oa = sin(vec2(3.0, 7.0) * ia), ob = sin(vec2(3.0, 7.0) * (ia + 1.0));',
+    '  vec2 dx = dFdx(uv), dy = dFdy(uv);',
+    '  vec4 a = textureGrad(s, uv + oa, dx, dy), b = textureGrad(s, uv + ob, dx, dy);',
+    '  return mix(a, b, smoothstep(0.2, 0.8, f - 0.1 * dot(a - b, vec4(1.0))));',
+    '}',
+    'mat2 mtRot; float mtTint;',
+    'vec2 mtUV(vec2 uv){',
+    '  vec2 g = uv * 2.0, cell = floor(g), loc = fract(g) - 0.5;',
+    '  float h = atHash(cell + 17.0), h2 = atHash(cell + 91.0); mtTint = atHash(cell + 3.7);',
+    '  float r = floor(h * 4.0) * 1.5707963; float c = cos(r), s = sin(r);',
+    '  mtRot = mat2(c, s, -s, c);',
+    '  vec2 pick = floor(vec2(h2, fract(h2 * 7.31)) * 2.0);',
+    '  return (pick + 0.5 + mtRot * loc) / 2.0;',
+    '}',
+    'vec4 mtSample(sampler2D s, vec2 uv){ vec2 u2 = mtUV(uv); return textureGrad(s, u2, mtRot * dFdx(uv), mtRot * dFdy(uv)); }',
+    'uniform sampler2D tDetailN; uniform float uDetailScale; uniform float uDetailK;'
+  ].join('\n');
+
+  function realism(m, mode, detailTex, detailScale, detailK) {
+    var prev = m.onBeforeCompile;
+    var fn = mode === 'tiles' ? 'mtSample' : mode === 'plain' ? 'texture2D' : 'atSample';
+    m.onBeforeCompile = function (sh, r) {
+      if (prev) prev.call(this, sh, r);
+      sh.uniforms.tDetailN = { value: detailTex };
+      sh.uniforms.uDetailScale = { value: detailScale || 6 };
+      sh.uniforms.uDetailK = { value: detailK || 0 };
+      var mapF = T.ShaderChunk.map_fragment.replace('texture2D( map, vMapUv )', fn + '( map, vMapUv )');
+      if (mode === 'tiles') mapF = mapF.replace('diffuseColor *= sampledDiffuseColor;', 'diffuseColor *= sampledDiffuseColor * (0.955 + 0.09 * mtTint);');
+      var roughF = T.ShaderChunk.roughnessmap_fragment.replace('texture2D( roughnessMap, vRoughnessMapUv )', fn + '( roughnessMap, vRoughnessMapUv )');
+      var nrmF = T.ShaderChunk.normal_fragment_maps
+        .replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
+          'vec3 mapN = ' + fn + '( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;' + (mode === 'tiles' ? ' mapN.xy = mapN.xy * mtRot;' : ''))
+        .replace('mapN.xy *= normalScale;', 'mapN.xy *= normalScale;\n\tvec3 dN = texture2D( tDetailN, vNormalMapUv * uDetailScale ).xyz * 2.0 - 1.0;\n\tmapN = normalize( vec3( mapN.xy + dN.xy * uDetailK, mapN.z ) );');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\n' + AT_GLSL)
+        .replace('#include <map_fragment>', mapF)
+        .replace('#include <roughnessmap_fragment>', roughF)
+        .replace('#include <normal_fragment_maps>', nrmF);
+    };
+    var key = 'real-' + mode + (detailK || 0);
+    var prevKey = m.customProgramCacheKey;
+    m.customProgramCacheKey = function () { return key + (prevKey ? prevKey.call(m) : ''); };
+    m.needsUpdate = true;
+    return m;
+  }
+
   /* ============================ material library =========================== */
   function MaterialLibrary(tf, Q, envMap) {
     this.tf = tf; this.Q = Q; this.env = envMap;
@@ -484,6 +571,19 @@
     this.foliage = std({ map: tf.foliage(), alphaTest: 0.4, side: T.DoubleSide, roughness: 0.8, metalness: 0 });
     this.shadow = new T.MeshBasicMaterial({ map: tf.blob(false), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
     this.shadowSq = new T.MeshBasicMaterial({ map: tf.blob(true), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+
+    // anti-tiling + detail mikro (tier medium/high; low tetap sederhana)
+    if (rich) {
+      var dn = tf.detailNormal();
+      realism(this.marble, 'tiles', dn, 9, 0.12);
+      realism(this.granite, 'stochastic', dn, 5, 0.22);
+      realism(this.concrete, 'stochastic', dn, 4, 0.3);
+      realism(this.plaster, 'stochastic', dn, 3, 0.25);
+      realism(this.ceiling, 'stochastic', dn, 3, 0.15);
+      realism(this.terrazzo, 'stochastic', dn, 6, 0.18);
+      realism(this.wood, 'plain', dn, 4, 0.12);          // papan kayu: struktur papan harus utuh
+      realism(this.woodDark, 'plain', dn, 4, 0.12);
+    }
 
     // penanda siapa yang boleh memproyeksikan bayangan real-time (tier high)
     [this.metalDark, this.metalSteel, this.wood, this.woodDark, this.planter, this.stoneLight, this.fascia,
@@ -830,24 +930,38 @@
     var TOD = {
       day: {
         dir: new T.Vector3(0.24, 1, 0.3).normalize(), color: new T.Color(0xfff0d8),
-        sun: Q.shadows ? 12 : 1.4, hemiSky: new T.Color(0xeaf2ff), hemiGround: new T.Color(0x74644f), hemi: Q.shadows ? 0.3 : 0.75,
-        point: 30, exposure: Q.shadows ? 0.9 : 1.0,
-        fog: new T.Color(0xd4d9df), fogDensity: 0.004
+        sun: Q.shadows ? 12 : 1.4, hemiSky: new T.Color(0xeaf2ff), hemiGround: new T.Color(0x74644f), hemi: Q.shadows ? 0.1 : 0.4,
+        point: 30, exposure: Q.shadows ? 0.82 : 0.95, envGain: 0.5,
+        fog: new T.Color(0xd4d9df), fogDensity: 0.0022
       },
       night: {
         dir: new T.Vector3(-0.32, 0.9, -0.3).normalize(), color: new T.Color(0x9fb6ff),
-        sun: Q.shadows ? 0.6 : 0.2, hemiSky: new T.Color(0x1b2442), hemiGround: new T.Color(0x0d0c0b), hemi: Q.shadows ? 0.07 : 0.12,
-        point: 55, exposure: 0.85,
+        sun: Q.shadows ? 0.6 : 0.2, hemiSky: new T.Color(0x1b2442), hemiGround: new T.Color(0x0d0c0b), hemi: Q.shadows ? 0.03 : 0.08,
+        point: 55, exposure: Q.name === 'high' ? 0.78 : 0.95, envGain: Q.name === 'high' ? 0.75 : 0.95,
         fog: new T.Color(0x0c0f17), fogDensity: 0.0075
       }
     };
 
     function setupLighting() {
-      W.envDay = buildEnvironment(renderer, false);
-      W.envNight = buildEnvironment(renderer, true);
-      scene.environment = W.envDay;
       W.sunDir = TOD.day.dir.clone();
-      W.sky = buildSky(TOD.day.dir, TOD.night.dir);
+      if (window.MallSky) {
+        // panorama 360° HDR dibuat otomatis (langit fisik, awan, siluet kota) → latar + HDRI
+        W.pano = MallSky.create(renderer, {
+          width: Q.name === 'high' ? 4096 : 2048, sunDir: TOD.day.dir, moonDir: TOD.night.dir, seed: 3.7
+        });
+        var pmrem = new T.PMREMGenerator(renderer);
+        W.pano.render(1); W.envSkyNight = pmrem.fromEquirectangular(W.pano.texture).texture;
+        W.pano.render(0); W.envSkyDay = pmrem.fromEquirectangular(W.pano.texture).texture;
+        pmrem.dispose();
+        W.pano.k = 0;
+        W.envDay = W.envSkyDay; W.envNight = W.envSkyNight;     // diganti light probe saat finish
+        W.sky = MallSky.dome(W.pano.texture);
+      } else {
+        W.envDay = buildEnvironment(renderer, false);
+        W.envNight = buildEnvironment(renderer, true);
+        W.sky = buildSky(TOD.day.dir, TOD.night.dir);
+      }
+      scene.environment = W.envDay;
       scene.add(W.sky);
 
       W.hemi = new T.HemisphereLight(0xeaf2ff, 0x74644f, TOD.day.hemi);
@@ -921,16 +1035,124 @@
       W.hemi.groundColor.copy(D.hemiGround).lerp(N.hemiGround, e);
       W.hemi.intensity = lerp(D.hemi, N.hemi, e);
       W.points.forEach(function (p) { p.intensity = lerp(D.point, N.point, e); });
+      (W.cafeLights || []).forEach(function (p) { p.intensity = lerp(14, 22, e); });
+      if (W.fountainCaustic) W.fountainCaustic.value = lerp(0.9, 0.35, e);
+      if (W.fountainLight) W.fountainLight.value.setRGB(lerp(1.25, 0.95, e), lerp(1.3, 0.85, e), lerp(1.35, 0.7, e));
       renderer.toneMappingExposure = lerp(D.exposure, N.exposure, e);
       if (W.hdrU) W.hdrU.uHdrExposure.value = renderer.toneMappingExposure;
-      W.sky.material.uniforms.uNight.value = e;
+      if (W.pano) {
+        // panorama dibuat ulang saat transisi (dibatasi tiap 3 frame) dan sekali di posisi akhir
+        W.panoTick = (W.panoTick || 0) + 1;
+        if (W.pano.k !== e && (e === 0 || e === 1 || W.panoTick % 3 === 0)) { W.pano.render(e); W.pano.k = e; }
+      } else {
+        W.sky.material.uniforms.uNight.value = e;
+      }
       scene.environment = e < 0.5 ? W.envDay : W.envNight;
       if (W.shaftMat) W.shaftMat.uniforms.uStrength.value = 1 - e;
       (W.lampGlows || []).forEach(function (g) { g.material.opacity = e * 0.95; });
       (W.lampHeads || []).forEach(function (m) { m.color.setScalar(0.25 + e * 0.75); });
       if (scene.fog) { scene.fog.color.copy(D.fog).lerp(N.fog, e); scene.fog.density = lerp(D.fogDensity, N.fogDensity, e); }
       if (W.post) W.post.setNight(e);
+      if (window.MallAudio) MallAudio.setNight(e);
+      // intensitas cahaya tak langsung (light probe) per siang/malam
+      if (W.envMats) {
+        var gain = lerp(D.envGain, N.envGain, e);
+        for (var mi = 0; mi < W.envMats.length; mi++) W.envMats[mi].m.envMapIntensity = W.envMats[mi].base * gain;
+      }
       fitShadow();
+    }
+
+    /* --------------- global illumination: light probe dari mall itu sendiri --------------- */
+    // Mall dirender ke cubemap dari tengah koridor (matahari, langit HDR, lampu, signage
+    // yang menyala, pantulan lantai & dinding), lalu dijadikan PMREM untuk cahaya tak
+    // langsung (diffuse + spekular) semua material. Tier high mengulang sekali lagi memakai
+    // hasil pertama → dua pantulan cahaya (bounce). Dilakukan sekali per siang/malam saat memuat.
+    function captureProbe(k) {
+      applyTOD(k);
+      scene.environment = k ? W.envSkyNight : W.envSkyDay;
+      var size = Q.name === 'high' ? 256 : 128, bounces = Q.name === 'high' ? 2 : 1;
+      var cubeRT = new T.WebGLCubeRenderTarget(size, { type: T.HalfFloatType });
+      var cam = new T.CubeCamera(0.1, 1500, cubeRT);
+      cam.position.set(0, 3.2, 4.5);
+      scene.add(cam);
+      var pins = W.pins.map(function (p) { var v = p.sprite ? p.sprite.visible : true; if (p.sprite) p.sprite.visible = false; return v; });
+      var pmrem = new T.PMREMGenerator(renderer), probe = null;
+      W.capturing = true;
+      for (var b = 0; b < bounces; b++) {
+        renderer.shadowMap.needsUpdate = true;
+        cam.update(renderer, scene);
+        var next = pmrem.fromCubemap(cubeRT.texture);
+        if (probe) probe.dispose();
+        probe = next;
+        scene.environment = probe.texture;
+      }
+      W.capturing = false;
+      W.pins.forEach(function (p, i) { if (p.sprite) p.sprite.visible = pins[i]; });
+      scene.remove(cam); cubeRT.dispose(); pmrem.dispose();
+      return probe.texture;
+    }
+
+    // PCSS: bayangan matahari tajam di dekat kaki objek dan melembut makin jauh
+    // (contact-hardening), seperti bayangan sungguhan. Hanya tier high.
+    function installPCSS() {
+      if (!Q.softShadows || T.ShaderChunk.shadowmap_pars_fragment.indexOf('pcssShadow') >= 0) return;
+      var sc = W.sun.shadow.camera;
+      var frustum = Math.max(sc.right - sc.left, sc.top - sc.bottom), range = sc.far - sc.near;
+      var f = function (v) { return v.toFixed(6); };
+      var code = [
+        '#define PCSS_RANGE ' + f(range),
+        '#define PCSS_FRUSTUM ' + f(frustum),
+        '#define PCSS_SUN_TAN 0.022',                                      // ±1,3° (matahari + difusi kaca skylight)
+        '#define PCSS_MAX_UV ' + f(0.9 / frustum),
+        '#define PCSS_MIN_UV ' + f(1.6 / Q.shadowSize),
+        'vec2 pcssDisk(int i, float n, float rot){ float r = sqrt((float(i) + 0.5) / n); float a = float(i) * 2.399963 + rot; return vec2(cos(a), sin(a)) * r; }',
+        'float pcssShadow(sampler2D map, vec4 c){',
+        '  float rot = rand(gl_FragCoord.xy) * 6.283185;',
+        '  float zR = c.z, sum = 0.0, nb = 0.0;',
+        '  for (int i = 0; i < 12; i++) {',
+        '    float d = unpackRGBAToDepth(texture2D(map, c.xy + pcssDisk(i, 12.0, rot) * PCSS_MAX_UV));',
+        '    if (d < zR) { sum += d; nb += 1.0; }',
+        '  }',
+        '  if (nb < 0.5) return 1.0;',
+        '  float zB = sum / nb;',
+        '  float r = clamp((zR - zB) * PCSS_RANGE * PCSS_SUN_TAN / PCSS_FRUSTUM, PCSS_MIN_UV, PCSS_MAX_UV);',
+        '  float lit = 0.0;',
+        '  for (int i = 0; i < 20; i++) lit += step(zR, unpackRGBAToDepth(texture2D(map, c.xy + pcssDisk(i, 20.0, rot + 1.3) * r)));',
+        '  return lit / 20.0;',
+        '}',
+        ''
+      ].join('\n');
+      var chunk = T.ShaderChunk.shadowmap_pars_fragment;
+      chunk = chunk.replace('#ifdef USE_SHADOWMAP', '#ifdef USE_SHADOWMAP\n' + code);
+      chunk = chunk.replace('#if defined( SHADOWMAP_TYPE_PCF )', 'return pcssShadow( shadowMap, shadowCoord );\n\t\t#if defined( SHADOWMAP_TYPE_PCF )');
+      T.ShaderChunk.shadowmap_pars_fragment = chunk;
+    }
+
+    // Box-projected (parallax-corrected) environment: pantulan probe dikoreksi terhadap kotak
+    // koridor, jadi etalase/kolom terpantul di posisi yang benar pada lantai & kaca, bukan
+    // "di tak hingga". Di luar kotak (dalam toko, plaza) pantulan biasa dipakai.
+    function installBoxProjection(center) {
+      var SC = T.ShaderChunk;
+      if (SC.envmap_physical_pars_fragment.indexOf('bpCorrect') >= 0) return;
+      var v3 = function (x, y, z) { return 'vec3(' + [x, y, z].map(function (n) { return n.toFixed(3); }).join(', ') + ')'; };
+      var bmin = v3(ctx.FRONT_L, 0.0, MALL.minZ), bmax = v3(ctx.FRONT_R, LV.sky, MALL.maxZ), bc = v3(center.x, center.y, center.z);
+      SC.shadowmap_pars_vertex = '#ifdef USE_ENVMAP\nvarying vec3 vBPWorld;\n#endif\n' + SC.shadowmap_pars_vertex;
+      SC.worldpos_vertex = SC.worldpos_vertex + '\n#ifdef USE_ENVMAP\n\tvBPWorld = worldPosition.xyz;\n#endif';
+      SC.envmap_physical_pars_fragment = SC.envmap_physical_pars_fragment.replace('#ifdef USE_ENVMAP', [
+        '#ifdef USE_ENVMAP',
+        'varying vec3 vBPWorld;',
+        'vec3 bpCorrect(vec3 dir){',
+        '  vec3 bmin = ' + bmin + ', bmax = ' + bmax + ';',
+        '  vec3 p = vBPWorld;',
+        '  if (any(lessThan(p, bmin)) || any(greaterThan(p, bmax))) return dir;',
+        '  vec3 t1 = (bmax - p) / dir, t2 = (bmin - p) / dir;',
+        '  vec3 tf = max(t1, t2);',
+        '  float t = min(min(tf.x, tf.y), tf.z);',
+        '  return normalize(p + dir * t - ' + bc + ');',
+        '}'].join('\n')).replace(
+        'reflectVec = inverseTransformDirection( reflectVec, viewMatrix );\n\t\t\tvec4 envMapColor',
+        'reflectVec = inverseTransformDirection( reflectVec, viewMatrix );\n\t\t\treflectVec = bpCorrect( reflectVec );\n\t\t\tvec4 envMapColor');
+      if (SC.envmap_physical_pars_fragment.indexOf('bpCorrect( reflectVec )') < 0) console.warn('box projection: chunk tidak cocok');
     }
 
     function setupMaterials() {
@@ -1079,7 +1301,7 @@
       A1: { name: 'Nusantara Batik', sub: 'WASTRA · BATIK TULIS', style: 'serif', bg: '#2a1c12', fg: '#e8c88a', accent: '#c9964f', floor: 'wood', wall: '#6b4a2f', stock: ['#8c5a34', '#c9964f', '#3f5d52'] },
       A3: { name: 'TechNest', sub: 'GADGETS & WEARABLES', style: 'sans', bg: '#0a1220', fg: '#5fd4ff', accent: '#2aa9e0', floor: 'terrazzo', wall: '#18222f', stock: ['#2b3442', '#5fd4ff', '#e7ebf2'] },
       A4: { name: 'PORSCHE GALLERY', sub: 'CLASSIC · SINCE 1948', style: 'wide', bg: '#0c0c0e', fg: '#e9e9e9', accent: '#c8102e', floor: 'granite', wall: '#17181c', stock: [] },
-      A6: { name: 'Kopi Senja', sub: 'SPECIALTY COFFEE', style: 'serif', bg: '#3a2417', fg: '#f3d9b1', accent: '#d98b4a', floor: 'wood', wall: '#5a3a26', stock: ['#6b4430', '#d98b4a', '#f3e6d0'] },
+      A6: { name: 'Kopi Senja', sub: 'SPECIALTY COFFEE', style: 'serif', bg: '#3a2417', fg: '#f3d9b1', accent: '#d98b4a', floor: 'wood', wall: '#5a3a26', stock: ['#6b4430', '#d98b4a', '#f3e6d0'], cafe: true },
       B1: { name: 'Aroma Bakery', sub: 'PATISSERIE · ARTISAN BREAD', style: 'serif', bg: '#fbefe9', fg: '#a8435b', accent: '#e8a0b4', floor: 'terrazzo', wall: '#f1d7dc', stock: ['#e8a0b4', '#f6e2c0', '#c98b4b'] },
       B4: { name: 'ZEN FITNESS', sub: 'GYM · YOGA STUDIO', style: 'wide', bg: '#0e1d17', fg: '#7ee0a6', accent: '#39b77a', floor: 'rubber', wall: '#1d3429', stock: ['#2b2f38', '#5aa9a0', '#7ee0a6'] },
       K1: { name: 'Juice Bar Segar', sub: 'FRESH · COLD PRESSED', style: 'round', bg: '#ff8a1f', fg: '#ffffff', accent: '#ffb347', stock: [] }
@@ -1362,7 +1584,7 @@
       var floorMat = !tenant ? M.concrete
         : brand.floor === 'wood' ? M.wood : brand.floor === 'terrazzo' ? M.terrazzo
         : brand.floor === 'granite' ? M.granite : M.paint('#26292e', 0.9);
-      B.floor(floorMat, 0, 0, Wd, D, 0.004, floorMat === M.wood ? 1.8 : 2);
+      B.floor(floorMat, 0, 0, Wd, D, 0.004, floorMat === M.wood ? 1.6 : 2);
       var wallMat = tenant ? M.plaster : M.paint('#d6d3cc', 0.95);
       B.box(wallMat, -Wd / 2, 2.3, 0, 0.3, 4.6, D, { collide: true, tile: 2.5 });
       B.box(wallMat, Wd / 2, 2.3, 0, 0.3, 4.6, D, { collide: true, tile: 2.5 });
@@ -1417,6 +1639,7 @@
     function buildTenantInterior(u, rec, B, brand, Wd, D, F) {
       var M = W.mat, rnd = mulberry32(u.id.charCodeAt(0) * 31 + u.id.charCodeAt(1));
       var showroom = u.id === 'A4';
+      if (brand.cafe) return buildCafe(u, rec, B, brand, Wd, D, F, rnd);
 
       // panel lampu plafon
       for (var zz = -F + 1.5; zz < F - 0.8; zz += 2.2) {
@@ -1484,6 +1707,193 @@
       if (showroom) buildShowroom(u, rec, B, F);
     }
 
+    /* ---------------- kafe (Kopi Senja): bar kopi, menu, meja, pendant ---------------- */
+    function buildCafe(u, rec, B, brand, Wd, D, F, rnd) {
+      var M = W.mat;
+      var walnut = M.woodDark, oak = M.wood, top = M.granite;
+      var cup = M.paint('#f3efe8', 0.35), bean = M.paint('#2c1a10', 0.7), copper = M.brass;
+      var leather = M.paint('#6a3b22', 0.5), bag = brand.stock.map(function (h) { return M.paint(h, 0.75); });
+
+      // plafon bilah kayu di atas plafon gelap + cove LED hangat di dinding belakang
+      B.plane(M.paint('#17120e', 0.95), 0, 4.16, 0, Wd - 0.3, D - 0.3, { rx: Math.PI / 2 });
+      for (var sx = -Wd / 2 + 0.25; sx < Wd / 2 - 0.1; sx += 0.28) B.box(oak, sx, 4.1, 0, 0.09, 0.05, D - 0.4);
+      B.box(M.ledWarm, 0, 3.92, -F + 0.2, Wd - 0.8, 0.03, 0.04);
+      // dinding samping: wainscot kayu + cat limewash hangat
+      var lime = M.paint('#b79c7f', 0.92);
+      [-1, 1].forEach(function (side) {
+        var wx = side * (Wd / 2 - 0.16);
+        B.box(lime, wx, 2.6, 0, 0.02, 3.0, D - 0.6);
+        B.box(walnut, wx - side * 0.005, 0.6, 0, 0.03, 1.2, D - 0.6);
+        B.box(copper, wx - side * 0.02, 1.21, 0, 0.02, 0.03, D - 0.6);
+      });
+      // satu lampu titik hangat: kafe terasa hangat walau koridor sedang siang
+      if (Q.name !== 'low') {
+        var warm = new T.PointLight(0xffb978, 0, 11, 2);
+        warm.position.set(0, 3.6, 0.5); rec.group.add(warm);
+        W.cafeLights = (W.cafeLights || []).concat([warm]);
+      }
+
+      // ---- bar kopi di belakang ----
+      var bz = -F + 1.85, Lb = Wd - 2.2, bh = 1.05;
+      B.box(M.blackGloss, 0, 0.05, bz, Lb - 0.1, 0.1, 0.62);
+      B.box(walnut, 0, 0.55, bz - 0.03, Lb, 0.9, 0.62, { collide: true });
+      for (var fx = -Lb / 2 + 0.06; fx < Lb / 2 - 0.02; fx += 0.085) B.box(oak, fx, 0.56, bz + 0.29, 0.05, 0.86, 0.03);   // bilah depan
+      B.box(top, 0, bh - 0.025, bz, Lb + 0.1, 0.05, 0.82);
+      B.box(copper, 0, 0.12, bz + 0.33, Lb, 0.02, 0.02);                                   // pijakan kaki kuningan
+      B.shadow(M, 0, bz, Lb + 1, 1.5, true);
+
+      // mesin espresso dua group head
+      var ex = -Lb / 2 + 1.1, ey = bh;
+      B.box(M.metalSteel, ex, ey + 0.23, bz - 0.12, 0.78, 0.42, 0.5);
+      B.box(M.blackGloss, ex, ey + 0.46, bz - 0.12, 0.8, 0.04, 0.52);
+      B.box(copper, ex, ey + 0.3, bz + 0.135, 0.5, 0.08, 0.01);
+      [-0.18, 0.18].forEach(function (gx) {
+        B.cyl(M.metalSteel, ex + gx, ey + 0.13, bz + 0.17, 0.045, 0.05, 0.08, { seg: 16 });
+        B.box(M.blackGloss, ex + gx, ey + 0.1, bz + 0.27, 0.035, 0.03, 0.18);         // gagang portafilter
+        B.cyl(cup, ex + gx, ey + 0.035, bz + 0.17, 0.035, 0.028, 0.07, { seg: 14 });
+      });
+      B.box(M.metalDark, ex, ey + 0.015, bz + 0.16, 0.7, 0.03, 0.2);                   // drip tray
+      B.cyl(M.metalSteel, ex + 0.36, ey + 0.2, bz + 0.16, 0.008, 0.008, 0.28, { seg: 6, rz: 0.35 });   // steam wand
+      for (var ci = 0; ci < 5; ci++) B.cyl(cup, ex - 0.28 + ci * 0.14, ey + 0.52, bz - 0.15, 0.04, 0.03, 0.08, { seg: 12 });
+      // grinder
+      var gx2 = ex + 0.75;
+      B.box(M.metalDark, gx2, ey + 0.18, bz - 0.1, 0.2, 0.36, 0.26);
+      B.cyl(M.glassCase, gx2, ey + 0.46, bz - 0.1, 0.1, 0.06, 0.22, { seg: 16 });
+      B.cyl(bean, gx2, ey + 0.42, bz - 0.1, 0.085, 0.055, 0.13, { seg: 16 });
+      // POS + toples biji kopi
+      var pos = new T.BoxGeometry(0.3, 0.22, 0.02); pos.rotateX(-0.4); pos.translate(Lb / 2 - 1.9, ey + 0.2, bz + 0.2);
+      B.add(M.screen, pos);
+      B.box(M.metalDark, Lb / 2 - 1.9, ey + 0.06, bz + 0.16, 0.04, 0.12, 0.04);
+      // etalase pastry di ujung bar
+      var px = Lb / 2 - 0.65;
+      B.box(M.glassCase, px, ey + 0.24, bz, 0.95, 0.46, 0.6);
+      B.box(M.metalDark, px, ey + 0.475, bz, 0.97, 0.02, 0.62);
+      B.box(M.ledWarm, px, ey + 0.46, bz, 0.7, 0.008, 0.04);
+      B.box(M.stoneLight, px, ey + 0.2, bz, 0.9, 0.015, 0.55);
+      var pastry = [M.paint('#c98a3e', 0.55), M.paint('#e0b070', 0.55), M.paint('#5a3220', 0.5), M.paint('#f1e2c6', 0.5)];
+      for (var pi = 0; pi < 8; pi++) {
+        var ppx = px - 0.36 + (pi % 4) * 0.24, ppz = bz - 0.12 + Math.floor(pi / 4) * 0.24, shelf = pi % 2 ? ey + 0.215 : ey + 0.01;
+        B.cyl(pastry[pi % 4], ppx, shelf + 0.035, ppz, 0.075, 0.085, 0.07, { seg: 14 });
+      }
+
+      // ---- lemari belakang + rak terbuka ----
+      B.box(M.blackGloss, 0, 0.45, -F + 0.5, Wd - 1.2, 0.9, 0.6, { collide: true });
+      B.box(top, 0, 0.92, -F + 0.5, Wd - 1.1, 0.04, 0.64);
+      [1.45, 1.85].forEach(function (y) {
+        [-1, 1].forEach(function (side) {
+          var sx2 = side * (Wd / 2 - 1.55);
+          B.box(oak, sx2, y, -F + 0.32, 1.9, 0.04, 0.3);
+          for (var k = 0; k < 6; k++) {
+            var jx = sx2 - 0.8 + k * 0.32;
+            if ((k + (y > 1.6 ? 1 : 0)) % 2) {
+              B.cyl(M.glassCase, jx, y + 0.13, -F + 0.32, 0.07, 0.07, 0.22, { seg: 14 });
+              B.cyl(bean, jx, y + 0.09, -F + 0.32, 0.062, 0.062, 0.14, { seg: 14 });
+            } else B.box(bag[k % bag.length], jx, y + 0.14, -F + 0.32, 0.16, 0.26, 0.09);
+          }
+        });
+      });
+
+      // logo menyala + dua papan menu kapur
+      var logoW = Math.min(3.0, Wd * 0.36);
+      var logo = makeSign(logoW, 0.8, { glow: true, px: 1024, intensity: 0.95 }, function (c, w, h) { drawBrand(c, w, h, brand, false); });
+      logo.place(0, 2.85, -F + 0.17, 0); rec.group.add(logo.mesh);
+      var menuW = Math.min(1.5, Wd / 2 - logoW / 2 - 0.45), menuX = logoW / 2 + 0.2 + menuW / 2;
+      var MENU = [
+        { head: 'w3.cafeCoffee', items: [['Espresso', '22'], ['Americano', '26'], ['Cappuccino', '32'], ['Cafe Latte', '34'], ['Kopi Susu Senja', '30'], ['V60 Manual Brew', '38']] },
+        { head: 'w3.cafeOther', items: [['Matcha Latte', '36'], ['Teh Tarik', '24'], ['Croissant', '28'], ['Pain au Chocolat', '32'], ['Banana Bread', '26'], ['Cheesecake', '38']] }
+      ];
+      MENU.forEach(function (mn, i) {
+        var board = makeSign(menuW, menuW * 0.82, { px: 512 }, function (c, w, h) {
+          c.fillStyle = '#1b1d1a'; c.fillRect(0, 0, w, h);
+          c.strokeStyle = '#8a5a34'; c.lineWidth = w * 0.025; c.strokeRect(0, 0, w, h);
+          c.fillStyle = '#f2e6cf'; c.textBaseline = 'middle';
+          fit(c, ctx.t(mn.head), '700', h * 0.1, 'serif', w * 0.85);
+          c.textAlign = 'center'; c.fillText(ctx.t(mn.head), w / 2, h * 0.13);
+          c.fillStyle = 'rgba(242,230,207,.35)'; c.fillRect(w * 0.12, h * 0.21, w * 0.76, 2);
+          mn.items.forEach(function (it, r) {
+            var y = h * (0.31 + r * 0.115);
+            c.fillStyle = '#f2e6cf'; c.font = font('500', h * 0.062, 'ui'); c.textAlign = 'left'; c.fillText(it[0], w * 0.09, y);
+            c.fillStyle = '#e8a25c'; c.textAlign = 'right'; c.fillText(it[1] + 'K', w * 0.91, y);
+          });
+        });
+        board.place((i ? 1 : -1) * menuX, 2.6, -F + 0.17, 0); rec.group.add(board.mesh); W.i18n.push(board);
+      });
+
+      // pendant lamp: kabel, kap kuningan, bola lampu menyala
+      function pendant(x, z, drop) {
+        var y = 4.05 - drop;
+        B.cyl(M.metalDark, x, (4.08 + y) / 2, z, 0.004, 0.004, 4.08 - y, { seg: 4 });
+        B.cyl(copper, x, y, z, 0.03, 0.17, 0.2, { seg: 20, open: true });
+        B.cyl(M.metalDark, x, y + 0.11, z, 0.03, 0.03, 0.04, { seg: 10 });
+        B.cyl(M.ledWarm, x, y - 0.05, z, 0.045, 0.045, 0.07, { seg: 12 });
+      }
+      [-Lb / 3, 0, Lb / 3].forEach(function (x) { pendant(x, bz, 1.55); });
+
+      // ---- area duduk ----
+      function chair(x, z, rot) {
+        var c = Math.cos(rot), s = Math.sin(rot);
+        function at(dx, dz) { return [x + dx * c + dz * s, z - dx * s + dz * c]; }
+        var seat = at(0, 0);
+        B.box(oak, seat[0], 0.46, seat[1], 0.42, 0.04, 0.42, { ry: rot });
+        var back = at(0, -0.2);
+        B.box(oak, back[0], 0.8, back[1], 0.4, 0.16, 0.025, { ry: rot });
+        [-0.18, 0.18].forEach(function (bxo) { var bp = at(bxo, -0.2); B.cyl(M.metalDark, bp[0], 0.65, bp[1], 0.012, 0.012, 0.38, { seg: 6 }); });
+        [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]].forEach(function (l) {
+          var p = at(l[0], l[1]);
+          B.cyl(M.metalDark, p[0], 0.23, p[1], 0.012, 0.012, 0.46, { seg: 6 });
+        });
+      }
+      function roundTable(x, z) {
+        B.cyl(M.stoneLight, x, 0.745, z, 0.36, 0.36, 0.03, { seg: 28 });
+        B.cyl(M.metalDark, x, 0.37, z, 0.03, 0.03, 0.72, { seg: 8 });
+        B.cyl(M.metalDark, x, 0.015, z, 0.22, 0.24, 0.03, { seg: 20 });
+        B.cyl(cup, x + 0.1, 0.8, z - 0.05, 0.04, 0.03, 0.08, { seg: 12 });
+        B.collider(x, z, 0.8, 0.8, 0);
+        B.shadow(M, x, z, 1.6, 1.6);
+      }
+      // kiri: banquette kulit sepanjang dinding + meja kecil
+      var z0 = bz + 1.6, z1 = F - 1.9, bx = -Wd / 2 + 0.45;
+      B.box(walnut, bx, 0.22, (z0 + z1) / 2, 0.6, 0.44, z1 - z0, { collide: true });
+      B.box(leather, bx + 0.02, 0.5, (z0 + z1) / 2, 0.56, 0.12, z1 - z0 - 0.04);
+      for (var cz2 = z0 + 0.4; cz2 < z1; cz2 += 0.8) B.box(leather, bx - 0.22, 0.86, cz2, 0.14, 0.58, 0.76);   // bantal sandaran berjahit
+      for (var tz = z0 + 0.7; tz < z1 - 0.3; tz += 1.5) {
+        var tx = bx + 0.85;
+        B.box(M.stoneLight, tx, 0.745, tz, 0.6, 0.03, 0.6);
+        B.cyl(M.metalDark, tx, 0.37, tz, 0.03, 0.03, 0.72, { seg: 8 });
+        B.box(M.metalDark, tx, 0.015, tz, 0.4, 0.03, 0.4);
+        B.cyl(cup, tx - 0.1, 0.8, tz + 0.08, 0.04, 0.03, 0.08, { seg: 12 });
+        chair(tx + 0.6, tz, -Math.PI / 2);
+        B.collider(tx, tz, 0.7, 0.7, 0);
+        pendant(tx, tz, 1.75);
+      }
+      // kanan: meja bundar dengan dua kursi
+      var rx = Wd / 2 - 1.45;
+      for (var rz = z0 + 0.6; rz < z1 - 0.2; rz += 2.0) {
+        roundTable(rx, rz);
+        chair(rx - 0.62, rz, Math.PI / 2);
+        chair(rx + 0.62, rz, -Math.PI / 2);
+        pendant(rx, rz, 1.65);
+      }
+      // tanaman di pot
+      [[Wd / 2 - 0.45, -F + 1.3], [-Wd / 2 + 0.5, bz + 0.9]].forEach(function (pp) {
+        B.cyl(M.planter, pp[0], 0.28, pp[1], 0.2, 0.15, 0.56, { seg: 18, collide: true });
+        shrubs(B, pp[0], pp[1], 0.25, 0.25, 3, rnd, 0.5);
+      });
+
+      // ---- etalase merchandise di jendela + neon OPEN ----
+      var booths = u.products.filter(function (p) { return p.booth === 0 || p.booth === 1; });
+      booths.forEach(function (pr) {
+        mountProduct(rec, B, pr, (pr.booth === 0 ? -1 : 1) * (Wd / 2 - 0.95), F - 0.95, 0.95, 0.7);
+      });
+      var neon = makeSign(0.9, 0.34, { glow: true, px: 256, transparent: true }, function (c, w, h) {
+        c.clearRect(0, 0, w, h);
+        c.textBaseline = 'middle'; c.textAlign = 'center'; c.font = font('700', h * 0.62, 'serif');
+        c.shadowColor = '#ff7a3a'; c.shadowBlur = h * 0.18; c.fillStyle = '#ffb27a';
+        c.fillText(ctx.t('w3.open'), w / 2, h * 0.52);
+      });
+      neon.place(-(Wd / 2 - 0.95), 2.55, F - 0.2, 0); rec.group.add(neon.mesh); W.i18n.push(neon);
+    }
+
     function buildShowroom(u, rec, B, F) {
       var M = W.mat;
       B.cyl(M.blackGloss, 0, 0.12, 0, 2.6, 2.7, 0.24, { seg: 64, collide: true });
@@ -1505,7 +1915,7 @@
         lab.place(1.6, 0.9, F - 1.2, -0.35); rec.group.add(lab.mesh); W.i18n.push(lab);
         B.box(M.metalDark, 1.6, 0.4, F - 1.25, 0.06, 0.8, 0.06);
       }
-      // tombol menuju showroom VR (halaman lain)
+      // tombol membuka panel produk mobil (pratinjau 3D + View in AR)
       var link = makeSign(2.2, 0.5, { glow: true, px: 512 }, function (c, w, h) {
         roundRect(c, 0, 0, w, h, h * 0.2); c.fillStyle = '#ffb020'; c.fill();
         c.fillStyle = '#241500'; c.textBaseline = 'middle';
@@ -1654,6 +2064,35 @@
     // ---------- air mancur bertingkat + air beriak (shader) + semburan ----------
     function buildFountain() {
       var M = W.mat, B = W.B.frame(0, 0, 0);
+      var IMPACT_R = 1.42, NOZZLE_R = 2.33;
+
+      // dasar bak dengan kaustik air bergerak (opaque → ikut terlihat lewat refraksi air)
+      var causticU = { uTime: { value: 0 }, uCaustic: { value: 1 } };
+      function causticMat(base) {
+        var m = base.clone();
+        m.userData = Object.assign({}, base.userData);
+        m.onBeforeCompile = function (sh) {
+          Object.assign(sh.uniforms, causticU);
+          sh.vertexShader = 'varying vec3 vCWorld;\n' + sh.vertexShader.replace('#include <worldpos_vertex>',
+            '#include <worldpos_vertex>\nvCWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+          sh.fragmentShader = [
+            'uniform float uTime; uniform float uCaustic; varying vec3 vCWorld;',
+            'float causticF(vec2 uv, float t){',
+            '  vec2 p = mod(uv * 6.28318, 6.28318) - 250.0; vec2 i = p; float c = 1.0;',
+            '  for (int n = 0; n < 4; n++) {',
+            '    float tt = t * (1.0 - (3.5 / float(n + 1)));',
+            '    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));',
+            '    c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / 0.005), p.y / (cos(i.y + tt) / 0.005)));',
+            '  }',
+            '  c /= 4.0; c = 1.17 - pow(c, 1.4); return clamp(pow(abs(c), 8.0), 0.0, 2.0);',
+            '}'].join('\n') + '\n' + sh.fragmentShader.replace('#include <opaque_fragment>',
+            'outgoingLight += diffuseColor.rgb * causticF(vCWorld.xz * 0.45, uTime * 0.55) * uCaustic;\n#include <opaque_fragment>');
+        };
+        m.customProgramCacheKey = function () { return 'caustic'; };
+        return m;
+      }
+      var floorC = causticMat(M.granite), floorTop = causticMat(M.stoneLight);
+
       // bak bertingkat sebagai wadah terbuka: dinding luar, dinding dalam (menghadap ke dalam),
       // bibir atas berbentuk cincin, dan dasar — air terlihat di dalamnya
       var inner = W.mat.stoneInner || (W.mat.stoneInner = M.stoneLight.clone());
@@ -1663,64 +2102,168 @@
         B.cyl(inner, 0, (y0 + y1) / 2 + 0.02, 0, rIn, rIn, y1 - y0 - 0.04, { seg: 72, open: true });
         var rim = new T.RingGeometry(rIn, rOut, 72); rim.rotateX(-Math.PI / 2); rim.translate(0, y1, 0);
         B.add(M.stoneLight, rim);
-        var fl = new T.CircleGeometry(rIn, 72); fl.rotateX(-Math.PI / 2); fl.translate(0, y0 + 0.06, 0);
-        B.add(floorMat, fl);
+        var fl = new T.Mesh(new T.CircleGeometry(rIn, 72), floorMat);
+        fl.geometry.rotateX(-Math.PI / 2); fl.position.y = y0 + 0.06;
+        fl.receiveShadow = Q.shadows; W.root.add(fl);
       }
-      basin(2.5, 2.72, 0, 0.56, M.granite);
+      basin(2.5, 2.72, 0, 0.56, floorC);
       B.torus(M.stoneLight, 0, 0.56, 0, 2.61, 0.1, { rx: Math.PI / 2, ts: 96, rs: 12 });
       B.cyl(M.stoneLight, 0, 0.35, 0, 1.12, 1.18, 0.7, { seg: 48 });               // alas tier 2 (di bawah air)
-      basin(0.92, 1.08, 0.7, 1.22, M.granite);
+      basin(0.92, 1.08, 0.7, 1.22, floorC);
       B.torus(M.brass, 0, 1.22, 0, 1.0, 0.03, { rx: Math.PI / 2, ts: 72 });
       B.cyl(M.stoneLight, 0, 1.5, 0, 0.12, 0.22, 0.56, { seg: 24 });
-      basin(0.52, 0.62, 1.78, 2.0, M.stoneLight);
+      basin(0.52, 0.62, 1.78, 2.0, floorTop);
+      // nosel kuningan di bibir bak bawah
+      for (var nz = 0; nz < 8; nz++) {
+        var na = nz / 8 * Math.PI * 2;
+        B.cyl(M.brass, Math.cos(na) * NOZZLE_R, 0.64, Math.sin(na) * NOZZLE_R, 0.022, 0.03, 0.08, { seg: 10, rz: 0, rx: 0 });
+      }
       B.collider(0, 0, 5.5, 5.5, 0);
       B.shadow(M, 0, 0, 7.2, 7.2);
 
+      // ---- permukaan air: gelombang di vertex (riak dari titik jatuh semburan) ----
       var wn = W.tf.waterNormal(); wn.repeat.set(3, 3);
-      var water = new T.MeshStandardMaterial({
-        color: 0x1d5f7a, roughness: 0.12, metalness: 0, normalMap: wn, normalScale: new T.Vector2(0.45, 0.45),
-        envMapIntensity: 0.75, transparent: true, opacity: 0.95
+      var waterU = { uTime: { value: 0 } };
+      var transmissive = false;          // transmission = render ulang seluruh scene per frame → terlalu mahal
+      function waterMat(impacts, amp) {
+        var o = {
+          color: 0x2b6f80, roughness: 0.04, metalness: 0, normalMap: wn, normalScale: new T.Vector2(0.35, 0.35),
+          envMapIntensity: 1.0, ior: 1.333, specularIntensity: 1
+        };
+        if (transmissive) {
+          o.color = 0xffffff; o.transmission = 1; o.thickness = 0.45;
+          o.attenuationColor = new T.Color(0x1f7c86); o.attenuationDistance = 0.55;
+        } else { o.transparent = true; o.depthWrite = false; }
+        var m = new T.MeshPhysicalMaterial(o);
+        m.onBeforeCompile = function (sh) {
+          Object.assign(sh.uniforms, waterU);
+          var waveFn = [
+            'uniform float uTime;',
+            'float waveH(vec2 p){',
+            '  float h = 0.0;',
+            impacts ? '  for (int i = 0; i < 8; i++) { float a = float(i) * 0.7853982; vec2 c = vec2(cos(a), sin(a)) * ' + IMPACT_R.toFixed(3) + ';' +
+              ' float d = length(p - c); h += 0.011 * sin(d * 30.0 - uTime * 10.0) * exp(-d * 2.4); }' : '',
+            '  h += 0.004 * sin(dot(p, vec2(3.1, 1.7)) * 2.0 + uTime * 1.3) + 0.003 * sin(dot(p, vec2(-1.3, 2.9)) * 2.6 - uTime * 1.7);',
+            '  return h * ' + amp.toFixed(2) + ';',
+            '}'].join('\n');
+          sh.vertexShader = waveFn + '\n' + sh.vertexShader
+            .replace('#include <beginnormal_vertex>', [
+              'float eW = 0.03;',
+              'float hx = waveH(position.xz + vec2(eW, 0.0)) - waveH(position.xz - vec2(eW, 0.0));',
+              'float hz = waveH(position.xz + vec2(0.0, eW)) - waveH(position.xz - vec2(0.0, eW));',
+              'vec3 objectNormal = normalize(vec3(-hx / (2.0 * eW), 1.0, -hz / (2.0 * eW)));',
+              '#ifdef USE_TANGENT', 'vec3 objectTangent = vec3(tangent.xyz);', '#endif'].join('\n'))
+            .replace('#include <begin_vertex>', 'vec3 transformed = vec3(position); transformed.y += waveH(position.xz);');
+          sh.fragmentShader = 'uniform float uTime;\n' + sh.fragmentShader.replace(
+            'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
+            'vec3 mapA = texture2D( normalMap, vNormalMapUv + uTime * vec2( 0.021, 0.013 ) ).xyz * 2.0 - 1.0;\n' +
+            '\tvec3 mapB = texture2D( normalMap, vNormalMapUv * 1.63 - uTime * vec2( 0.017, -0.026 ) ).xyz * 2.0 - 1.0;\n' +
+            '\tvec3 mapN = normalize( vec3( mapA.xy + mapB.xy, mapA.z * mapB.z ) );');
+          if (!transmissive) {
+            // tanpa refraksi: transparansi mengikuti Fresnel (jernih dilihat dari atas, memantul di sudut miring)
+            sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>',
+              '#include <opaque_fragment>\n\tfloat fresW = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);\n' +
+              '\tgl_FragColor.a = mix(0.62, 0.97, fresW);');
+          }
+        };
+        m.customProgramCacheKey = function () { return 'water' + (impacts ? 'I' : 'C') + amp + transmissive; };
+        m.userData.noAO = true;
+        return m;
+      }
+      var waterLow = waterMat(true, 1), waterUp = waterMat(false, 0.5);
+      [[1.1, 2.5, 0.47, waterLow], [0, 0.92, 1.15, waterUp], [0, 0.52, 1.95, waterUp]].forEach(function (d) {
+        var g = d[0] > 0 ? new T.RingGeometry(d[0], d[1], 128, 24) : new T.CircleGeometry(d[1], 64);
+        g.rotateX(-Math.PI / 2);
+        var m = new T.Mesh(g, d[3]); m.position.y = d[2]; m.userData.noAO = true; m.renderOrder = 1;
+        W.root.add(m);
       });
-      water.onBeforeCompile = function (shader) {
-        shader.uniforms.uTime = { value: 0 };
-        water.userData.shader = shader;
-        shader.fragmentShader = 'uniform float uTime;\n' + shader.fragmentShader.replace(
-          'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
-          'vec3 mapA = texture2D( normalMap, vNormalMapUv + uTime * vec2( 0.021, 0.013 ) ).xyz * 2.0 - 1.0;\n' +
-          '\tvec3 mapB = texture2D( normalMap, vNormalMapUv * 1.63 - uTime * vec2( 0.017, -0.026 ) ).xyz * 2.0 - 1.0;\n' +
-          '\tvec3 mapN = normalize( vec3( mapA.xy + mapB.xy, mapA.z * mapB.z ) );');
-      };
-      [[2.5, 0.47], [0.92, 1.15], [0.52, 1.95]].forEach(function (d) {
-        var g = new T.CircleGeometry(d[0], 64); g.rotateX(-Math.PI / 2);
-        var m = new T.Mesh(g, water); m.position.y = d[1]; W.root.add(m);
-      });
-      W.ticks.push(function (t) { if (water.userData.shader) water.userData.shader.uniforms.uTime.value = t; });
+      W.ticks.push(function (t) { waterU.uTime.value = t; causticU.uTime.value = t; });
+      W.fountainCaustic = causticU.uCaustic;
 
       if (!Q.jets) return;
-      // semburan: tetesan instanced di lintasan parabola dari 8 nosel ke tengah + air terjun tier atas
-      var drops = new T.InstancedMesh(new T.SphereGeometry(0.035, 6, 4),
-        new T.MeshBasicMaterial({ color: 0xe6f6ff, transparent: true, opacity: 0.75 }), 8 * 14 + 40);
-      drops.frustumCulled = false;
-      W.root.add(drops);
-      var m4 = new T.Matrix4(), v = new T.Vector3(), sc = new T.Vector3();
-      W.ticks.push(function (t) {
-        var i = 0;
-        for (var j = 0; j < 8; j++) {
-          var a = j / 8 * Math.PI * 2, sx = Math.cos(a) * 2.35, sz = Math.sin(a) * 2.35;
-          for (var k = 0; k < 14; k++) {
-            var p = ((t * 0.55 + k / 14 + j * 0.13) % 1);
-            v.set(lerp(sx, sx * 0.45, p), 0.55 + Math.sin(p * Math.PI) * 1.05, lerp(sz, sz * 0.45, p));
-            var s2 = 0.7 + Math.sin(p * Math.PI) * 0.6; sc.set(s2, s2 * 1.4, s2);
-            m4.compose(v, drops.quaternion, sc); drops.setMatrixAt(i++, m4);
-          }
-        }
-        for (var q = 0; q < 40; q++) {
-          var ang = q / 40 * Math.PI * 2 + t * 0.2, pr = ((t * 0.9 + q * 0.37) % 1);
-          v.set(Math.cos(ang) * 0.6, 1.99 - pr * 0.75, Math.sin(ang) * 0.6);
-          sc.set(0.6, 2.2, 0.6); m4.compose(v, drops.quaternion, sc); drops.setMatrixAt(i++, m4);
-        }
-        drops.instanceMatrix.needsUpdate = true;
+      buildFountainParticles(IMPACT_R, NOZZLE_R);
+    }
+
+    // ---- partikel air di GPU: semburan parabola, cipratan, kabut, air terjun, bubbler ----
+    function buildFountainParticles(IMPACT_R, NOZZLE_R) {
+      var k = Q.name === 'high' ? 1 : 0.55;
+      var spec = [[0, 8, Math.round(110 * k)], [1, 8, Math.round(36 * k)], [2, 8, 5], [3, 1, Math.round(340 * k)], [4, 1, Math.round(90 * k)]];
+      var data = [], rnd = mulberry32(77);
+      spec.forEach(function (sp) {
+        for (var src = 0; src < sp[1]; src++) for (var i = 0; i < sp[2]; i++) data.push(sp[0], src, (i + rnd() * 0.5) / sp[2], rnd());
       });
+      var n = data.length / 4, g = new T.BufferGeometry();
+      g.setAttribute('position', new T.BufferAttribute(new Float32Array(n * 3), 3));
+      g.setAttribute('aData', new T.BufferAttribute(new Float32Array(data), 4));
+      g.boundingSphere = new T.Sphere(new T.Vector3(0, 1, 0), 4);
+      var mat = new T.ShaderMaterial({
+        transparent: true, depthWrite: false,
+        uniforms: { uTime: { value: 0 }, uScale: { value: 400 }, uLight: { value: new T.Color(1, 1, 1) } },
+        vertexShader: [
+          'uniform float uTime; uniform float uScale;',
+          'attribute vec4 aData;',
+          'varying float vAlpha;',
+          'const float TAU = 6.2831853;',
+          'void main(){',
+          '  float type = aData.x, src = aData.y, r1 = aData.z, r2 = aData.w;',
+          '  float ang = src * TAU / 8.0; vec2 dir = vec2(cos(ang), sin(ang)), side = vec2(-dir.y, dir.x);',
+          '  vec3 S = vec3(dir.x * ' + NOZZLE_R.toFixed(2) + ', 0.66, dir.y * ' + NOZZLE_R.toFixed(2) + ');',
+          '  vec3 E = vec3(dir.x * ' + IMPACT_R.toFixed(2) + ', 0.47, dir.y * ' + IMPACT_R.toFixed(2) + ');',
+          '  vec3 p; float size = 0.03; vAlpha = 0.7;',
+          '  if (type < 0.5) {',                                   // semburan
+          '    float life = fract(uTime * 0.7 + r1);',
+          '    p = mix(S, E, life); p.y += 4.0 * 0.95 * life * (1.0 - life);',
+          '    p.xz += side * (r2 - 0.5) * 0.05 * life;',
+          '    p.y += (fract(r2 * 7.3) - 0.5) * 0.03 * life;',
+          '    size = mix(0.024, 0.04, life); vAlpha = 0.75;',
+          '  } else if (type < 1.5) {',                            // cipratan di titik jatuh
+          '    float life = fract(uTime * 1.7 + r1);',
+          '    float a = r2 * TAU; vec2 sd = vec2(cos(a), sin(a));',
+          '    p = E + vec3(sd.x, 0.0, sd.y) * (0.06 + 0.22 * life * fract(r2 * 13.1));',
+          '    p.y += 0.32 * (0.5 + fract(r2 * 5.7)) * 4.0 * life * (1.0 - life) * 0.5;',
+          '    size = 0.018; vAlpha = 0.8 * (1.0 - life);',
+          '  } else if (type < 2.5) {',                            // kabut halus
+          '    float life = fract(uTime * 0.22 + r1);',
+          '    p = E + vec3((r1 - 0.5) * 0.4, 0.05 + life * 0.45, (r2 - 0.5) * 0.4);',
+          '    size = 0.45 + life * 0.45; vAlpha = 0.035 * sin(life * 3.14159);',
+          '  } else if (type < 3.5) {',                            // air terjun dari bak atas
+          '    float life = fract(uTime * 1.25 + r2);',
+          '    float a = r1 * TAU + uTime * 0.05; vec2 sd = vec2(cos(a), sin(a));',
+          '    float rr = 0.61 + 0.1 * life + (fract(r2 * 11.0) - 0.5) * 0.02;',
+          '    p = vec3(sd.x * rr, 1.99 - 0.77 * life * life, sd.y * rr);',
+          '    size = 0.026; vAlpha = 0.55;',
+          '  } else {',                                            // bubbler di puncak
+          '    float life = fract(uTime * 1.1 + r1);',
+          '    float a = r2 * TAU; vec2 sd = vec2(cos(a), sin(a)) * (0.02 + 0.13 * life);',
+          '    p = vec3(sd.x, 2.0 + 0.5 * 4.0 * life * (1.0 - life), sd.y);',
+          '    size = 0.028; vAlpha = 0.7 * (1.0 - life * 0.6);',
+          '  }',
+          '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+          '  gl_Position = projectionMatrix * mv;',
+          '  gl_PointSize = clamp(size * uScale / -mv.z, 1.0, 96.0);',
+          '}'].join('\n'),
+        fragmentShader: [
+          'uniform vec3 uLight; varying float vAlpha;',
+          'void main(){',
+          '  vec2 c = gl_PointCoord - 0.5; float d = length(c) * 2.0;',
+          '  float a = smoothstep(1.0, 0.25, d) * vAlpha;',
+          '  if (a < 0.01) discard;',
+          '  vec3 col = uLight * (0.85 + 0.35 * (1.0 - d));',          // inti sedikit lebih terang
+          '  gl_FragColor = vec4(col, a);',
+          '  #include <tonemapping_fragment>',
+          '  #include <colorspace_fragment>',
+          '}'].join('\n')
+      });
+      var pts = new T.Points(g, mat);
+      pts.frustumCulled = false; pts.renderOrder = 3; pts.userData.noAO = true;
+      var sz = new T.Vector2();
+      pts.onBeforeRender = function (r, sc, cam) {
+        r.getDrawingBufferSize(sz);
+        mat.uniforms.uScale.value = sz.y * 0.5 * cam.projectionMatrix.elements[5];
+      };
+      W.root.add(pts);
+      W.fountainLight = mat.uniforms.uLight;
+      W.ticks.push(function (t) { mat.uniforms.uTime.value = t; });
     }
 
     // ---------- eskalator naik-turun ke jembatan utara (anak tangga bergerak) ----------
@@ -2141,7 +2684,9 @@
       var view = new T.Vector3(), target = new T.Vector3(), plane = new T.Plane(), clip = new T.Vector4(), q = new T.Vector4();
       var size = new T.Vector2(), dirty = true;
 
-      M.onBeforeCompile = function (sh) {
+      var prevOBC = M.onBeforeCompile, prevKey = M.customProgramCacheKey;
+      M.onBeforeCompile = function (sh, r) {
+        if (prevOBC) prevOBC.call(this, sh, r);
         Object.assign(sh.uniforms, uniforms);
         sh.vertexShader = 'uniform mat4 uReflectMatrix;\nvarying vec4 vReflUv;\n' + sh.vertexShader.replace('#include <project_vertex>',
           '#include <project_vertex>\nvReflUv = uReflectMatrix * (modelMatrix * vec4(transformed, 1.0));');
@@ -2156,12 +2701,12 @@
           '}'
         ].join('\n'));
       };
-      M.customProgramCacheKey = function () { return 'marble-planar'; };
+      M.customProgramCacheKey = function () { return 'marble-planar' + (prevKey ? prevKey.call(M) : ''); };
       M.needsUpdate = true;
 
       function render(renderer, _scene, camera) {
         // di VR (WebXR) refleksi planar dimatikan; lantai kembali memakai IBL clearcoat
-        var xr = renderer.xr.isPresenting;
+        var xr = renderer.xr.isPresenting || W.capturing;
         uniforms.uReflect.value = xr ? 0 : 1;
         if (!dirty || xr || !camera.isPerspectiveCamera) return;
         dirty = false;
@@ -2279,8 +2824,8 @@
         W.post = post || null;
         if (!post) return;
         // puncak rendah = glow halus; signage di bawah ambang bloom supaya teks tetap tajam
-        W.mat.panel.userData.hdrPeak = 0.88;
-        hdrEmissive(0.96, 0.86, 0.7);
+        W.mat.panel.userData.hdrPeak = 0.9;
+        hdrEmissive(0.965, 0.86, 0.74);
         var k = W.tod.k;
         post.setNight(k * k * (3 - 2 * k));
       },
@@ -2300,6 +2845,21 @@
         ping: function (x, z) { var r = W.reticle; if (!r) return; r.pingPos.set(x, 0, z); r.pingT = 0; }
       },
       reflection: function () { return W.reflection || null; },
+      // jenis permukaan lantai di titik (x, z) → suara langkah kaki
+      surfaceAt: function (x, z) {
+        if (z > MALL.maxZ + 0.3) return 'paving';
+        if (z > MALL.maxZ - 2.6 && Math.abs(x) < 3.2) return 'carpet';           // keset di pintu masuk
+        for (var id in W.units) {
+          var u = W.units[id].u;
+          if (u.kind !== 'shop') continue;
+          if (Math.abs(x - u.cx) < u.dx / 2 && Math.abs(z - u.cz) < u.dz / 2) {
+            if (u.baseStatus !== 'rented') return 'concrete';
+            var f = (BRANDS[u.id] || {}).floor;
+            return f === 'wood' ? 'wood' : f === 'carpet' ? 'carpet' : 'marble';
+          }
+        }
+        return 'marble';
+      },
       stats: function () {
         var calls = renderer.info.render.calls, tris = renderer.info.render.triangles;
         return { calls: calls, triangles: tris, quality: Q.name, pixelRatio: renderer.getPixelRatio() };
@@ -2342,6 +2902,32 @@
       .then(step('finish', 0.95, function () {
         W.B.flush(W.root, Q.shadows);
         buildFloorReflection();
+        fitShadow();
+        installPCSS();
+        if (W.pano) {
+          installBoxProjection(new T.Vector3(0, 3.2, 4.5));
+          // semua material PBR: simpan envMapIntensity asli → diskalakan applyTOD
+          var seenM = [];
+          W.envMats = [];
+          scene.traverse(function (o) {
+            var m = o.material;
+            if (!m || Array.isArray(m) || !m.isMeshStandardMaterial || seenM.indexOf(m) >= 0) return;
+            seenM.push(m); W.envMats.push({ m: m, base: m.envMapIntensity });
+          });
+          // model produk (GLB) dimuat belakangan → ikut didaftarkan
+          sceneEl.addEventListener('model-loaded', function (ev) {
+            var root = ev.detail && ev.detail.model, k = W.tod.k, e = k * k * (3 - 2 * k);
+            var gain = lerp(TOD.day.envGain, TOD.night.envGain, e);
+            if (root) root.traverse(function (o) {
+              var m = o.material;
+              if (!m || Array.isArray(m) || !m.isMeshStandardMaterial || seenM.indexOf(m) >= 0) return;
+              seenM.push(m); W.envMats.push({ m: m, base: m.envMapIntensity });
+              m.envMapIntensity *= gain;
+            });
+          });
+          W.envDay = captureProbe(0);
+          W.envNight = captureProbe(1);
+        }
         applyTOD(ctx.timeOfDay === 'night' ? 1 : 0);
         W.tod.target = W.tod.k;
         refreshDynamic();

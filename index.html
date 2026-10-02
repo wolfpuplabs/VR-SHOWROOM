@@ -1,105 +1,16 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VR Porsche Showroom</title>
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-
-  <script>
-    // Komponen untuk membuat mobil bisa diklik dan memunculkan info
-    AFRAME.registerComponent('car-info', {
-      init: function () {
-        let el = this.el;
-        let infoText = document.querySelector('#info-panel');
-        let isVisible = false;
-
-        el.addEventListener('click', function () {
-          isVisible = !isVisible;
-          // Munculkan atau sembunyikan panel teks
-          infoText.setAttribute('visible', isVisible);
-          
-          // Efek loncat kecil saat diklik
-          el.setAttribute('animation', 'property: position; to: 0 0.1 0; dur: 200; dir: alternate; loop: 1');
-        });
-
-        // Efek kursor saat hover
-        el.addEventListener('mouseenter', function () {
-          el.setAttribute('scale', '1.02 1.02 1.02');
-        });
-        el.addEventListener('mouseleave', function () {
-          el.setAttribute('scale', '1 1 1');
-        });
-      }
-    });
-  </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wolfpup Virtual Mall</title>
+<!-- Halaman utama langsung membuka mall; showroom VR lama sudah dihapus -->
+<meta http-equiv="refresh" content="0; url=mall.html">
+<link rel="canonical" href="mall.html">
+<script>location.replace('mall.html' + location.search + location.hash);</script>
+<style>body{margin:0;background:#0b0d12;color:#eef1f7;font:15px system-ui,sans-serif;display:grid;place-items:center;height:100vh}a{color:#ffb020}</style>
 </head>
 <body>
-  <style>
-    #mall-link{position:fixed;top:14px;left:14px;z-index:10;display:flex;gap:8px;align-items:center;
-      font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-    #mall-link a{display:inline-block;padding:9px 14px;border-radius:11px;text-decoration:none;
-      font-size:13px;font-weight:600;color:#241500;background:linear-gradient(135deg,#ffb020,#ff7a45);
-      box-shadow:0 10px 26px rgba(0,0,0,.35)}
-    #mall-link span{font-size:12px;color:#cfd5e2;background:rgba(10,12,18,.7);padding:8px 12px;border-radius:11px}
-  </style>
-  <div id="mall-link">
-    <a href="mall.html">&larr; Enter Wolfpup Virtual Mall</a>
-    <span>This showroom occupies unit A4</span>
-  </div>
-
-  <a-scene shadow="type: pcfsoft">
-    
-    <a-assets>
-      <a-asset-item id="porsche-model" src="assets/Porsche 356B.glb"></a-asset-item>
-      <a-asset-item id="showroom-model" src="assets/showroom.glb"></a-asset-item>
-    </a-assets>
-
-    <a-entity position="0 1.6 5">
-      <a-camera look-controls wasd-controls="acceleration: 150">
-        <a-cursor color="#FFF" 
-                  raycaster="objects: .clickable"
-                  animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 150"
-                  animation__fusing="property: fusing; startEvents: fusing; from: 1 1 1; to: 0.1 0.1 0.1; dur: 1500"
-                  event-set__mouseenter="_event: mouseenter; color: #ff3366"
-                  event-set__mouseleave="_event: mouseleave; color: white">
-        </a-cursor>
-      </a-camera>
-    </a-entity>
-
-    <a-gltf-model src="#showroom-model" 
-                  position="0 0 0" 
-                  scale="1 1 1" 
-                  shadow="receive: true">
-    </a-gltf-model>
-
-    <a-entity position="0 0.1 0">
-      
-      <a-gltf-model class="clickable" car-info 
-                    src="#porsche-model" 
-                    position="0 0 0" 
-                    scale="1 1 1" 
-                    shadow="cast: true; receive: true">
-      </a-gltf-model>
-
-      <a-entity id="info-panel" visible="false" position="0 2.5 0" rotation="0 0 0">
-        <a-plane color="#111" width="3" height="1.2" opacity="0.8"></a-plane>
-        <a-text value="PORSCHE 356B\n\nMobil sport klasik legendaris.\nGenerasi pertama dari Porsche." 
-                align="center" 
-                color="#FFF" 
-                position="0 0 0.1" 
-                scale="0.8 0.8 0.8">
-        </a-text>
-      </a-entity>
-
-      <a-plane position="0 0.05 0" rotation="-90 0 0" width="3" height="5" color="#000" opacity="0.5"></a-plane>
-    </a-entity>
-
-    <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
-    <a-light type="spot" position="0 5 2" rotation="-60 0 0" color="#ffffff" intensity="1.5" angle="45" penumbra="0.5" castShadow="true"></a-light>
-    <a-light type="point" position="-3 3 -4" color="#33ccff" intensity="0.8"></a-light>
-    <a-light type="point" position="3 3 -4" color="#ff3366" intensity="0.8"></a-light>
-
-  </a-scene>
+<p>Opening the <a href="mall.html">Wolfpup Virtual Mall</a>…</p>
 </body>
 </html>
