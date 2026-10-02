@@ -131,6 +131,7 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
   pip install trimesh numpy usd-core
   python3 tools/generate-product-models.py   # bikin .glb produk
   python3 tools/glb-to-usdz.py               # turunkan .usdz + miniatur Porsche 1:18
+tools/bump-version.sh             penanda versi ?v= untuk skrip (hindari cache JS lama di GitHub Pages)
   ```
 
   Showroom A4 memakai `Porsche 356B.glb` yang sudah ada di repo, sekaligus jadi dua
