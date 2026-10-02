@@ -107,13 +107,16 @@ jobs:
                 echo "PR #$pr: ada konflik dengan $BASE_BRANCH, perlu diselesaikan manual."; return 0
               fi
 
-              failing=$(jq '[.statusCheckRollup[]? | (.conclusion // .state // "") |
+              # check milik workflow ini sendiri (job "automerge" yang sedang berjalan) diabaikan —
+              # kalau ikut dihitung, job menunggu dirinya sendiri sampai batas waktu habis
+              checks=$(jq --arg wf "$GITHUB_WORKFLOW" '[.statusCheckRollup[]? | select((.workflowName? // "") != $wf)]' <<<"$data")
+              failing=$(jq '[.[] | (.conclusion // .state // "") |
                 select(. == "FAILURE" or . == "ERROR" or . == "TIMED_OUT" or
-                       . == "CANCELLED" or . == "ACTION_REQUIRED" or . == "STARTUP_FAILURE")] | length' <<<"$data")
-              pending=$(jq '[.statusCheckRollup[]? |
+                       . == "CANCELLED" or . == "ACTION_REQUIRED" or . == "STARTUP_FAILURE")] | length' <<<"$checks")
+              pending=$(jq '[.[] |
                 select((.status? // "") == "QUEUED" or (.status? // "") == "IN_PROGRESS" or
                        (.status? // "") == "PENDING" or (.state? // "") == "PENDING" or
-                       (.state? // "") == "EXPECTED")] | length' <<<"$data")
+                       (.state? // "") == "EXPECTED")] | length' <<<"$checks")
 
               if [ "$failing" -gt 0 ]; then
                 echo "PR #$pr: $failing check gagal, tidak di-merge."; return 0
