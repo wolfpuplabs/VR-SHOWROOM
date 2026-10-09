@@ -113,6 +113,23 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
 
   Tier bisa dipaksa dari panel bantuan (**?** → Graphics); halaman dimuat ulang untuk menerapkannya.
 
+**Lobby multiplayer** (`mall-lobby.js`)
+
+- Tombol **Lobby** di toolbar → tulis nama, pilih warna karakter → **Host a lobby**. Kamu jadi
+  host dan mendapat **link undangan** (`mall.html?lobby=…`) untuk disalin/dibagikan.
+- Orang yang membuka link langsung melihat layar *You're invited*: tulis nama, pilih warna, **Join**.
+- Setiap pemain tampil sebagai karakter 3D berwarna dengan **papan nama** (host bertanda ★),
+  bergerak & menoleh mulus, punya titik di denah, dan **gelembung chat** di atas kepala.
+- **Chat** di panel Lobby (atau tekan **Enter**); ringkasan pesan muncul sebentar di layar,
+  dan tombol Lobby menampilkan jumlah pesan belum dibaca.
+- **Maks. 10 orang per sesi undangan** (host termasuk) — tamu ke-11 ditolak dengan pesan "lobby penuh".
+  Host bisa mengeluarkan tamu; saat host keluar, sesi berakhir untuk semua.
+- Tanpa server sendiri: koneksi **WebRTC peer-to-peer** lewat [PeerJS](https://peerjs.com)
+  (`vendor/peerjs/`). Server sinyal publik PeerJS hanya dipakai untuk berkenalan; posisi (10×/detik)
+  dan chat mengalir langsung antar browser dengan **host sebagai hub**. Host memvalidasi semua data
+  tamu (nama & chat dibersihkan, posisi dibatasi, chat dibatasi 1 pesan per 0,6 detik).
+  Jaringan kantor yang sangat ketat bisa memblokir WebRTC; PeerJS memakai TURN publiknya sebagai cadangan.
+
 **Product showcase + AR**
 
 - Setiap toko yang sudah terisi tenant punya **booth produk** dan meja kasir di dalamnya —
@@ -225,6 +242,8 @@ mall-world.js                  renderer 3D: material, pencahayaan, arsitektur, t
 mall-post.js                   post-processing (ES module): GTAO, bloom, grading sinematik
 mall-sky.js                    panorama 360° HDR otomatis (langit, awan, kota) → latar + HDRI
 mall-audio.js                  suara air mancur 3D, langkah kaki, room tone (WebAudio)
+mall-lobby.js                  lobby multiplayer P2P: host/undangan, avatar, chat, maks. 10 orang
+vendor/peerjs/                 PeerJS 1.5.5 (MIT) untuk koneksi WebRTC
 vendor/three/                  pass post-processing three.js (MIT) + shim ke THREE milik A-Frame
 assets/Porsche 356B.glb        mobil showroom unit A4 (web + AR Android)
 assets/products/*.glb          model produk tenant (web + AR Android)
