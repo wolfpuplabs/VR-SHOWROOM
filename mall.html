@@ -9,14 +9,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<script src="mall-world.js?v=202610091456"></script>
-<script src="mall-sky.js?v=202610091456"></script>
+<script src="mall-world.js?v=202610091559"></script>
+<script src="mall-sky.js?v=202610091559"></script>
 <script src="vendor/peerjs/peerjs.min.js"></script>
-<script src="mall-lobby.js?v=202610091456"></script>
-<script src="mall-audio.js?v=202610091456"></script>
+<script src="mall-lobby.js?v=202610091559"></script>
+<script src="mall-audio.js?v=202610091559"></script>
 <!-- modul contoh three.js (post-processing) memakai THREE milik A-Frame lewat shim -->
 <script type="importmap">{ "imports": { "three": "./vendor/three/three-shim.js" } }</script>
-<script type="module" src="mall-post.js?v=202610091456"></script>
+<script type="module" src="mall-post.js?v=202610091559"></script>
 <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 <style>
   :root{
@@ -294,6 +294,14 @@
   #lb-join .sheet{max-width:440px}
   #lb-join .sheet-body{display:flex;flex-direction:column;gap:8px}
   .row-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+
+  /* ---------- mode berbagi (lobby): tanpa UI leasing ---------- */
+  body.share-mode .occwrap,
+  body.share-mode #tabs [data-tab="spaces"],
+  body.share-mode #filters,
+  body.share-mode #side-foot,
+  body.share-mode #modal{display:none !important}
+  body.share-mode #tabs [data-tab="products"]{flex:1}
 
   /* ---------- welcome ---------- */
   #welcome{position:absolute;z-index:60;inset:0;display:grid;place-items:center;padding:16px;
@@ -645,7 +653,7 @@
   /* --------------------------------- bahasa --------------------------------- */
   var STR = {
     en: {
-      'brand.sub': 'Ground Floor · Leasing Center',
+      'brand.subShare': 'Ground Floor · Exploring together', 'brand.sub': 'Ground Floor · Leasing Center',
       'stat.units': 'Units', 'stat.available': 'Available', 'stat.reserved': 'Reserved',
       'stat.leased': 'Leased', 'stat.occupancy': 'Occupancy',
       'occ.available': 'available', 'occ.browse': 'Browse available spaces', 'btn.help': 'Help & settings',
@@ -702,6 +710,7 @@
       'hint.product': '{name} · {price} — click for 3D & AR',
       'hint.showroom': 'View the Porsche 356B in 3D & AR',
       'hint.directory': '<b>Directory</b> — click to browse every space',
+      'hint.directoryShare': '<b>Directory</b> — click to browse products',
       'hint.leasing': '<b>Leasing office</b> — click to see available spaces',
       'load.lighting': 'Setting up lighting…', 'load.materials': 'Baking materials…',
       'load.architecture': 'Raising the atrium…', 'load.stores': 'Fitting out the stores…',
@@ -709,7 +718,7 @@
       'q.label': 'Graphics', 'q.auto': 'Auto', 'q.low': 'Low', 'q.medium': 'Medium', 'q.high': 'High',
       'q.active': 'running: {q}',
       'tod.label': 'Lighting', 'tod.auto': 'Auto (clock)', 'tod.day': 'Day', 'tod.night': 'Night',
-      'lobby.btn': 'Lobby', 'lobby.title': 'Lobby', 'lobby.intro': 'Host a lobby, share the invite link, and walk the mall together with friends — up to {max} people per session.',
+      'lobby.btn': 'Lobby', 'lobby.title': 'Lobby', 'lobby.intro': 'Host a lobby, share the invite link, and walk the mall together with friends — up to {max} people per session. Inside a lobby the mall switches to explore mode: products only, no leasing.',
       'lobby.name': 'Your name', 'lobby.namePh': 'e.g. Rina', 'lobby.color': 'Character colour', 'lobby.host': 'Host a lobby',
       'lobby.invite': 'Invite link', 'lobby.copy': 'Copy', 'lobby.copied': 'Invite link copied', 'lobby.share': 'Share invite…',
       'lobby.chatPh': 'Type a message…', 'lobby.send': 'Send', 'lobby.leave': 'Leave lobby', 'lobby.end': 'End lobby for everyone',
@@ -753,7 +762,7 @@
       'w3.leasingCta': 'Rent a space today — tap here', 'w3.l2Soon': 'LEVEL 2 · LEASING SOON'
     },
     id: {
-      'brand.sub': 'Lantai Dasar · Leasing Center',
+      'brand.subShare': 'Lantai Dasar · Jelajah bersama', 'brand.sub': 'Lantai Dasar · Leasing Center',
       'stat.units': 'Unit', 'stat.available': 'Tersedia', 'stat.reserved': 'Dipesan',
       'stat.leased': 'Disewa', 'stat.occupancy': 'Okupansi',
       'occ.available': 'tersedia', 'occ.browse': 'Lihat space yang tersedia', 'btn.help': 'Bantuan & pengaturan',
@@ -810,6 +819,7 @@
       'hint.product': '{name} · {price} — klik untuk 3D & AR',
       'hint.showroom': 'Lihat Porsche 356B dalam 3D & AR',
       'hint.directory': '<b>Direktori</b> — klik untuk melihat semua space',
+      'hint.directoryShare': '<b>Direktori</b> — klik untuk melihat produk',
       'hint.leasing': '<b>Kantor leasing</b> — klik untuk melihat space yang tersedia',
       'load.lighting': 'Menyiapkan pencahayaan…', 'load.materials': 'Membuat material…',
       'load.architecture': 'Membangun atrium…', 'load.stores': 'Menata toko…',
@@ -817,7 +827,7 @@
       'q.label': 'Grafis', 'q.auto': 'Otomatis', 'q.low': 'Rendah', 'q.medium': 'Sedang', 'q.high': 'Tinggi',
       'q.active': 'berjalan: {q}',
       'tod.label': 'Pencahayaan', 'tod.auto': 'Otomatis (jam)', 'tod.day': 'Siang', 'tod.night': 'Malam',
-      'lobby.btn': 'Lobby', 'lobby.title': 'Lobby', 'lobby.intro': 'Jadi host lobby, bagikan link undangan, lalu jalan-jalan di mall bareng teman — maks. {max} orang per sesi.',
+      'lobby.btn': 'Lobby', 'lobby.title': 'Lobby', 'lobby.intro': 'Jadi host lobby, bagikan link undangan, lalu jalan-jalan di mall bareng teman — maks. {max} orang per sesi. Selama di lobby, mall masuk mode jelajah: hanya produk, tanpa leasing.',
       'lobby.name': 'Nama kamu', 'lobby.namePh': 'mis. Rina', 'lobby.color': 'Warna karakter', 'lobby.host': 'Buat lobby',
       'lobby.invite': 'Link undangan', 'lobby.copy': 'Salin', 'lobby.copied': 'Link undangan disalin', 'lobby.share': 'Bagikan undangan…',
       'lobby.chatPh': 'Ketik pesan…', 'lobby.send': 'Kirim', 'lobby.leave': 'Keluar dari lobby', 'lobby.end': 'Tutup lobby untuk semua',
@@ -1139,7 +1149,34 @@
 
   function updateUnitVisual(u) { if (world) world.updateUnit(u); }
 
+  // Mode berbagi = sedang di lobby (host atau tamu): semua UI leasing disembunyikan,
+  // pengunjung hanya menjelajah dan berinteraksi dengan produk.
+  function shareMode() { return !!(window.MallLobby && MallLobby.status().role); }
+  function applyShareMode() {
+    var on = shareMode(), was = document.body.classList.contains('share-mode');
+    document.body.classList.toggle('share-mode', on);
+    if (world && world.setLeasingUI) world.setLeasingUI(!on);
+    if (on && !was) {
+      if (modalEl.classList.contains('open')) { modalEl.classList.remove('open'); openUnitId = null; }
+      var pt = document.querySelector('#tabs [data-tab="products"]');
+      if (pt && pt.getAttribute('aria-pressed') !== 'true') pt.click();
+      var pop = $('#stats'); if (pop) { pop.classList.remove('open'); $('#btn-occ').setAttribute('aria-expanded', 'false'); }
+    }
+    var sub = $('.brand small');
+    if (sub) { sub.setAttribute('data-i18n', on ? 'brand.subShare' : 'brand.sub'); sub.innerHTML = t(on ? 'brand.subShare' : 'brand.sub'); }
+    if (on !== was) drawMap();
+  }
+
   function onWorldHover(target) {
+    if (target && shareMode()) {
+      // unit: tampilkan nama tenant saja (tanpa harga/sewa); unit kosong & meja leasing tidak interaktif
+      if (target.unit) {
+        var su = target.unit;
+        if (su.baseStatus !== 'rented' || !su.tenant) target = null;
+        else target = { text: '<b>' + esc(su.tenant) + '</b> &middot; ' + esc(L(su.cat)) };
+      } else if (target.text === t('hint.leasing')) target = null;
+      else if (target.text === t('hint.directory')) target = { text: t('hint.directoryShare') };
+    }
     hovered = (target && target.unit) || null;
     hoveredProduct = (target && target.product) || null;
     if (world) world.setHover(target);
@@ -1218,11 +1255,11 @@
         };
       },
       onHover: onWorldHover,
-      onUnitClick: guarded(function (u) { openUnit(u.id); }),
+      onUnitClick: guarded(function (u) { if (!shareMode()) openUnit(u.id); }),
       onProductClick: guarded(function (pr) { openProduct(pr.id); }),
       onShowroom: guarded(function () { openProduct('P-A4-1'); }),   // mobil ukuran asli → panel produk + AR
-      onDirectory: guarded(function () { openSidebar('spaces', 'all'); }),
-      onLeasing: guarded(function () { openSidebar('spaces', 'available'); }),
+      onDirectory: guarded(function () { if (shareMode()) openSidebar('products'); else openSidebar('spaces', 'all'); }),
+      onLeasing: guarded(function () { if (!shareMode()) openSidebar('spaces', 'available'); }),
       progress: progress
     };
   }
@@ -1542,7 +1579,7 @@
 
   function openUnit(id) {
     var u = BY_ID[id];
-    if (!u) return;
+    if (!u || shareMode()) return;
     openUnitId = id;
     var st = statusOf(u);
     var facil = L(u.facilities).map(function (f) { return '<em>' + esc(f) + '</em>'; }).join('');
@@ -1878,6 +1915,7 @@
     // unit
     UNITS.forEach(function (u) {
       var st = statusOf(u), meta = STATUS[st];
+      if (document.body.classList.contains('share-mode')) meta = { color: u.baseStatus === 'rented' && u.tenant ? '#7c8496' : '#3a404d' };
       var p = toMap(u.cx - u.dx / 2, u.cz - u.dz / 2);
       ctx.fillStyle = meta.color;
       ctx.globalAlpha = 0.78;
@@ -2291,6 +2329,7 @@
   }
 
   function onLobbyEvent(type, d) {
+    if (type === 'state') applyShareMode();
     if (type === 'state' || type === 'players') renderLobby();
     else if (type === 'chat') pushChat(d.name, d.color, d.text, false);
     else if (type === 'system') pushChat('', '', t(d.key, { name: d.name }), true);
