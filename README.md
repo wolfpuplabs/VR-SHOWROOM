@@ -124,6 +124,10 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
   dan tombol Lobby menampilkan jumlah pesan belum dibaca.
 - **Maks. 10 orang per sesi undangan** (host termasuk) — tamu ke-11 ditolak dengan pesan "lobby penuh".
   Host bisa mengeluarkan tamu; saat host keluar, sesi berakhir untuk semua.
+- **Mode jelajah**: selama berada di lobby (host maupun tamu) semua UI leasing disembunyikan —
+  pill okupansi, tab *Spaces for rent*, filter & ekspor booking, pin "for lease", form sewa, dan
+  warna status di denah. Pengunjung hanya menjelajah dan membuka produk (3D & AR); hover etalase
+  menampilkan nama tenant saja. Keluar dari lobby → tampilan leasing kembali seperti biasa.
 - Tanpa server sendiri: koneksi **WebRTC peer-to-peer** lewat [PeerJS](https://peerjs.com)
   (`vendor/peerjs/`). Server sinyal publik PeerJS hanya dipakai untuk berkenalan; posisi (10×/detik)
   dan chat mengalir langsung antar browser dengan **host sebagai hub**. Host memvalidasi semua data

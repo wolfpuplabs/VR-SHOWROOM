@@ -2020,7 +2020,7 @@
       rec.baseStripColor = rec.strip.color.clone();
       ['fascia', 'hoardA', 'hoardB', 'decal', 'wrap'].forEach(function (k) { if (rec.signs[k]) rec.signs[k].redraw(); });
       if (rec.pin) {
-        rec.pin.visible = st !== 'rented';
+        rec.pin.visible = st !== 'rented' && !W.leasingHidden;
         setPinKind(rec.pin, st === 'booked' ? 'reserved' : 'lease');
       }
     }
@@ -2810,6 +2810,11 @@
         ping: function (x, z) { var r = W.reticle; if (!r) return; r.pingPos.set(x, 0, z); r.pingT = 0; }
       },
       reflection: function () { return W.reflection || null; },
+      // mode berbagi (lobby): sembunyikan pin "for lease" / "reserved" di atas unit
+      setLeasingUI: function (on) {
+        W.leasingHidden = !on;
+        ctx.UNITS.forEach(updateUnit);
+      },
       // jenis permukaan lantai di titik (x, z) → suara langkah kaki
       surfaceAt: function (x, z) {
         if (z > MALL.maxZ + 0.3) return 'paving';
