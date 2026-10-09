@@ -5,6 +5,6 @@
 set -e
 cd "$(dirname "$0")/.."
 V=$(date -u +%Y%m%d%H%M)
-sed -i.bak -E "s#(src=\"mall-(world|sky|audio|post)\.js)(\?v=[0-9a-z]+)?\"#\1?v=$V\"#g" mall.html
+sed -i.bak -E "s#(src=\"mall-(world|sky|audio|post|lobby)\.js)(\?v=[0-9a-z]+)?\"#\1?v=$V\"#g" mall.html
 rm -f mall.html.bak
 grep -o 'mall-[a-z]*\.js?v=[0-9a-z]*' mall.html

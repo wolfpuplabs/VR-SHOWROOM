@@ -9,12 +9,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<script src="mall-world.js?v=202610020730"></script>
-<script src="mall-sky.js?v=202610020730"></script>
-<script src="mall-audio.js?v=202610020730"></script>
+<script src="mall-world.js?v=202610091456"></script>
+<script src="mall-sky.js?v=202610091456"></script>
+<script src="vendor/peerjs/peerjs.min.js"></script>
+<script src="mall-lobby.js?v=202610091456"></script>
+<script src="mall-audio.js?v=202610091456"></script>
 <!-- modul contoh three.js (post-processing) memakai THREE milik A-Frame lewat shim -->
 <script type="importmap">{ "imports": { "three": "./vendor/three/three-shim.js" } }</script>
-<script type="module" src="mall-post.js?v=202610020730"></script>
+<script type="module" src="mall-post.js?v=202610091456"></script>
 <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 <style>
   :root{
@@ -235,6 +237,64 @@
   /* tablet: joystick bergeser ke kanan sidebar supaya tidak menutupi daftar */
   body.touch #sidebar:not(.hidden) ~ #joy{left:360px}
 
+  /* ---------- lobby multiplayer ---------- */
+  .tb{position:relative}
+  .tb .badge{position:absolute;top:3px;right:3px;min-width:15px;height:15px;padding:0 4px;border-radius:9px;
+    background:var(--rented);color:#fff;font:700 9.5px/15px Inter,system-ui,sans-serif;font-style:normal;text-align:center}
+  #lobby{position:absolute;z-index:6;top:64px;right:14px;bottom:14px;width:330px;max-width:calc(100vw - 28px);
+    display:flex;flex-direction:column;background:var(--panel-solid);border:1px solid var(--stroke);border-radius:var(--radius);
+    box-shadow:var(--shadow);transition:transform .25s ease,opacity .25s ease;overflow:hidden}
+  #lobby.hidden{transform:translateX(115%);opacity:0;pointer-events:none}
+  body.lobby-open #mapwrap{right:358px}
+  .lb-head{display:flex;align-items:center;gap:10px;padding:12px 12px 10px 16px;border-bottom:1px solid var(--stroke)}
+  .lb-head > div{flex:1;min-width:0}
+  .lb-head b{display:block;font-size:15px}
+  .lb-head small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lb-count{font-size:12px;font-weight:700;color:var(--muted);background:rgba(255,255,255,.06);padding:4px 8px;border-radius:8px}
+  .lb-body{padding:12px 16px 14px;display:flex;flex-direction:column;gap:8px;min-height:0;flex:1}
+  #lb-session{gap:10px}
+  .lb-body[hidden],#lb-invite[hidden],#lb-share[hidden]{display:none}
+  .lb-intro{margin:0;color:var(--muted);font-size:12.5px;line-height:1.55}
+  .lb-label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+  .lb-input{font:inherit;font-size:13px;color:var(--text);background:rgba(255,255,255,.05);border:1px solid var(--stroke);
+    border-radius:10px;padding:9px 11px;outline:none;min-width:0;width:100%}
+  .lb-input:focus{border-color:var(--brand)}
+  .lb-colors{display:flex;gap:7px;flex-wrap:wrap}
+  .lb-colors button{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;
+    box-shadow:inset 0 0 0 2px rgba(0,0,0,.35)}
+  .lb-colors button[aria-pressed="true"]{border-color:#fff;transform:scale(1.08)}
+  .lb-wide{width:100%;padding:10px}
+  .lb-note{margin:0;font-size:12px;color:var(--muted);min-height:16px}
+  .lb-note.err{color:#ff9db0}
+  .lb-linkrow{display:flex;gap:6px}
+  .lb-linkrow .lb-input{font-size:11.5px;color:var(--muted)}
+  #lb-members{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:30%;overflow-y:auto;flex:0 0 auto}
+  #lb-members li{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:9px;background:rgba(255,255,255,.035);font-size:13px}
+  #lb-members .av{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;color:#12151c;flex:0 0 auto}
+  #lb-members .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #lb-members .tag{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  #lb-members .kick{font:inherit;font-size:11px;color:#ffb3c1;background:transparent;border:1px solid rgba(255,93,122,.35);border-radius:7px;padding:2px 7px;cursor:pointer}
+  #lb-msgs{flex:1;min-height:90px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:10px;
+    background:rgba(255,255,255,.03);border:1px solid var(--stroke)}
+  .msg{font-size:12.8px;line-height:1.45;word-wrap:break-word}
+  .msg b{font-weight:700;margin-right:5px}
+  .msg.sys{color:var(--muted);font-size:11.5px;font-style:italic}
+  #lb-form{display:flex;gap:6px}
+  #lb-form .btn{padding:8px 12px}
+  #chatlog{position:absolute;z-index:4;left:16px;bottom:160px;width:min(360px,calc(100vw - 32px));display:flex;flex-direction:column;
+    gap:5px;pointer-events:none}
+  #chatlog .msg{background:rgba(10,12,18,.62);backdrop-filter:blur(8px);border-radius:10px;padding:6px 10px;align-self:flex-start;
+    max-width:100%;transition:opacity .6s ease}
+  #chatlog .msg.fade{opacity:0}
+  body:not(.touch) #chatlog{bottom:22px}
+  body.lobby-open #chatlog{display:none}
+  #lb-join{position:absolute;z-index:61;inset:0;display:grid;place-items:center;padding:16px;
+    background:radial-gradient(1200px 600px at 50% 0%,rgba(90,169,255,.12),transparent 60%),rgba(4,6,10,.88)}
+  #lb-join[hidden]{display:none}
+  #lb-join .sheet{max-width:440px}
+  #lb-join .sheet-body{display:flex;flex-direction:column;gap:8px}
+  .row-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+
   /* ---------- welcome ---------- */
   #welcome{position:absolute;z-index:60;inset:0;display:grid;place-items:center;padding:16px;
     background:radial-gradient(1200px 600px at 50% 0%,rgba(255,176,32,.10),transparent 60%),rgba(4,6,10,.86)}
@@ -301,6 +361,11 @@
     #hint{top:auto;bottom:160px;font-size:12px;white-space:normal;max-width:86vw;text-align:center}
     #joy{width:112px;height:112px}
     #sidebar:not(.hidden) ~ #hint, #sidebar:not(.hidden) ~ #joy{display:none}
+    #lobby{top:auto;left:0;right:0;bottom:0;width:100%;max-width:none;height:64vh;border-radius:16px 16px 0 0}
+    #lobby.hidden{transform:translateY(110%)}
+    body.lobby-open #joy{display:none}
+    body.lobby-open #mapwrap{right:10px}
+    #chatlog{bottom:150px}
     form .grid2{grid-template-columns:1fr}
   }
 </style>
@@ -341,6 +406,11 @@
       <button class="tb" id="btn-map" data-i18n-title="btn.map" title="Map">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4 3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg>
         <span class="lbl" data-i18n="btn.map">Map</span>
+      </button>
+      <button class="tb" id="btn-lobby" data-i18n-title="lobby.title" title="Lobby">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.2A4.5 4.5 0 0 1 21 18.5"/></svg>
+        <span class="lbl" data-i18n="lobby.btn">Lobby</span>
+        <i class="badge" id="lb-badge" hidden></i>
       </button>
       <span class="sep"></span>
       <button class="tb" id="btn-tod" data-i18n-title="tod.toggle" title="Day / Night">
@@ -385,6 +455,62 @@
   <div id="mapwrap" class="pe">
     <div class="cap"><span data-i18n="map.title">Floor plan</span><span id="map-pos">0, 0</span></div>
     <canvas id="minimap" width="150" height="205"></canvas>
+  </div>
+
+  <!-- lobby multiplayer: host / anggota / undangan / chat -->
+  <aside id="lobby" class="pe hidden" aria-label="Lobby">
+    <div class="lb-head">
+      <div><b data-i18n="lobby.title">Lobby</b><small id="lb-sub"></small></div>
+      <span class="lb-count" id="lb-count"></span>
+      <button class="tb" id="lb-close" aria-label="Close">✕</button>
+    </div>
+    <div id="lb-start" class="lb-body">
+      <p class="lb-intro" data-i18n="lobby.intro">Host a lobby, share the invite link, and walk the mall together with friends.</p>
+      <label class="lb-label" for="lb-name" data-i18n="lobby.name">Your name</label>
+      <input id="lb-name" class="lb-input" maxlength="20" autocomplete="nickname" data-i18n-placeholder="lobby.namePh" placeholder="e.g. Rina">
+      <div class="lb-label" data-i18n="lobby.color">Character colour</div>
+      <div class="lb-colors" id="lb-colors"></div>
+      <button class="btn primary lb-wide" id="lb-host" data-i18n="lobby.host">Host a lobby</button>
+      <p class="lb-note" id="lb-start-note"></p>
+    </div>
+    <div id="lb-session" class="lb-body" hidden>
+      <div id="lb-invite">
+        <div class="lb-label" data-i18n="lobby.invite">Invite link</div>
+        <div class="lb-linkrow"><input id="lb-link" class="lb-input" readonly><button class="btn ghost" id="lb-copy" data-i18n="lobby.copy">Copy</button></div>
+        <button class="btn ghost lb-wide" id="lb-share" hidden data-i18n="lobby.share">Share invite…</button>
+      </div>
+      <ul id="lb-members"></ul>
+      <div id="lb-msgs" aria-live="polite"></div>
+      <form id="lb-form" autocomplete="off">
+        <input id="lb-input" class="lb-input" maxlength="200" data-i18n-placeholder="lobby.chatPh" placeholder="Type a message…">
+        <button class="btn primary" type="submit" data-i18n="lobby.send">Send</button>
+      </form>
+      <button class="btn ghost lb-wide" id="lb-leave"></button>
+    </div>
+  </aside>
+
+  <!-- ringkasan chat di layar saat panel tertutup -->
+  <div id="chatlog" aria-hidden="true"></div>
+
+  <!-- tamu yang membuka link undangan -->
+  <div id="lb-join" class="pe" hidden>
+    <div class="sheet">
+      <div class="sheet-head"><div>
+        <h2 data-i18n="lobby.joinTitle">You're invited to a lobby</h2>
+        <p data-i18n="lobby.joinSub">Pick a name and colour — your character will walk the mall with everyone in the lobby.</p>
+      </div></div>
+      <div class="sheet-body">
+        <label class="lb-label" for="lbj-name" data-i18n="lobby.name">Your name</label>
+        <input id="lbj-name" class="lb-input" maxlength="20" autocomplete="nickname" data-i18n-placeholder="lobby.namePh" placeholder="e.g. Rina">
+        <div class="lb-label" data-i18n="lobby.color">Character colour</div>
+        <div class="lb-colors" id="lbj-colors"></div>
+        <p class="lb-note" id="lbj-status"></p>
+        <div class="row-btns">
+          <button class="btn ghost" id="lbj-solo" data-i18n="lobby.solo">Explore alone</button>
+          <button class="btn primary" id="lbj-go" data-i18n="lobby.join">Join lobby</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="hint"></div>
@@ -583,6 +709,22 @@
       'q.label': 'Graphics', 'q.auto': 'Auto', 'q.low': 'Low', 'q.medium': 'Medium', 'q.high': 'High',
       'q.active': 'running: {q}',
       'tod.label': 'Lighting', 'tod.auto': 'Auto (clock)', 'tod.day': 'Day', 'tod.night': 'Night',
+      'lobby.btn': 'Lobby', 'lobby.title': 'Lobby', 'lobby.intro': 'Host a lobby, share the invite link, and walk the mall together with friends — up to {max} people per session.',
+      'lobby.name': 'Your name', 'lobby.namePh': 'e.g. Rina', 'lobby.color': 'Character colour', 'lobby.host': 'Host a lobby',
+      'lobby.invite': 'Invite link', 'lobby.copy': 'Copy', 'lobby.copied': 'Invite link copied', 'lobby.share': 'Share invite…',
+      'lobby.chatPh': 'Type a message…', 'lobby.send': 'Send', 'lobby.leave': 'Leave lobby', 'lobby.end': 'End lobby for everyone',
+      'lobby.you': 'you', 'lobby.hostTag': 'host', 'lobby.kick': 'Remove', 'lobby.subHost': 'You are hosting · share the link',
+      'lobby.subGuest': 'Connected to {host}', 'lobby.connecting': 'Connecting…', 'lobby.creating': 'Creating lobby…',
+      'lobby.joinTitle': "You're invited to a lobby", 'lobby.joinSub': 'Pick a name and colour — your character will walk the mall with everyone in the lobby.',
+      'lobby.join': 'Join lobby', 'lobby.solo': 'Explore alone', 'lobby.needName': 'Please type your name first.',
+      'lobby.joined': '{name} joined the lobby', 'lobby.left': '{name} left the lobby', 'lobby.kicked': '{name} was removed by the host',
+      'lobby.welcome': 'You joined the lobby — say hi!', 'lobby.created': 'Lobby created — share the invite link',
+      'lobby.err.full': 'This lobby is full ({max}/{max}). Ask the host to make room, or explore alone.',
+      'lobby.err.notfound': "Lobby not found — the host may have closed it.", 'lobby.err.timeout': 'Could not reach the lobby (timed out). Check your connection and try again.',
+      'lobby.err.network': 'Network error — could not connect to the lobby service.', 'lobby.err.closed': 'The host closed the connection.',
+      'lobby.err.unsupported': 'This browser does not support multiplayer (WebRTC).',
+      'lobby.ended': 'The host ended the lobby.', 'lobby.youKicked': 'The host removed you from the lobby.', 'lobby.youLeft': 'You left the lobby.',
+      'lobby.shareText': 'Join me in the Wolfpup Virtual Mall lobby!',
       'sound.toggle': 'Sound on / off', 'toast.soundOn': 'Sound on', 'toast.soundOff': 'Sound off',
       'tod.toggle': 'Switch day / night', 'toast.day': 'Daytime lighting', 'toast.night': 'Night lighting',
       'toast.teleport': 'Moved to the front of <b>{name}</b>',
@@ -675,6 +817,22 @@
       'q.label': 'Grafis', 'q.auto': 'Otomatis', 'q.low': 'Rendah', 'q.medium': 'Sedang', 'q.high': 'Tinggi',
       'q.active': 'berjalan: {q}',
       'tod.label': 'Pencahayaan', 'tod.auto': 'Otomatis (jam)', 'tod.day': 'Siang', 'tod.night': 'Malam',
+      'lobby.btn': 'Lobby', 'lobby.title': 'Lobby', 'lobby.intro': 'Jadi host lobby, bagikan link undangan, lalu jalan-jalan di mall bareng teman — maks. {max} orang per sesi.',
+      'lobby.name': 'Nama kamu', 'lobby.namePh': 'mis. Rina', 'lobby.color': 'Warna karakter', 'lobby.host': 'Buat lobby',
+      'lobby.invite': 'Link undangan', 'lobby.copy': 'Salin', 'lobby.copied': 'Link undangan disalin', 'lobby.share': 'Bagikan undangan…',
+      'lobby.chatPh': 'Ketik pesan…', 'lobby.send': 'Kirim', 'lobby.leave': 'Keluar dari lobby', 'lobby.end': 'Tutup lobby untuk semua',
+      'lobby.you': 'kamu', 'lobby.hostTag': 'host', 'lobby.kick': 'Keluarkan', 'lobby.subHost': 'Kamu host · bagikan link-nya',
+      'lobby.subGuest': 'Tersambung ke {host}', 'lobby.connecting': 'Menyambungkan…', 'lobby.creating': 'Membuat lobby…',
+      'lobby.joinTitle': 'Kamu diundang ke lobby', 'lobby.joinSub': 'Pilih nama dan warna — karaktermu akan jalan-jalan di mall bersama semua orang di lobby.',
+      'lobby.join': 'Masuk lobby', 'lobby.solo': 'Jelajah sendiri', 'lobby.needName': 'Tulis namamu dulu.',
+      'lobby.joined': '{name} masuk ke lobby', 'lobby.left': '{name} keluar dari lobby', 'lobby.kicked': '{name} dikeluarkan oleh host',
+      'lobby.welcome': 'Kamu masuk ke lobby — sapa yang lain!', 'lobby.created': 'Lobby dibuat — bagikan link undangannya',
+      'lobby.err.full': 'Lobby ini penuh ({max}/{max}). Minta host memberi tempat, atau jelajah sendiri.',
+      'lobby.err.notfound': 'Lobby tidak ditemukan — mungkin host sudah menutupnya.', 'lobby.err.timeout': 'Tidak bisa menjangkau lobby (waktu habis). Cek koneksi lalu coba lagi.',
+      'lobby.err.network': 'Gangguan jaringan — tidak bisa tersambung ke layanan lobby.', 'lobby.err.closed': 'Host menutup koneksi.',
+      'lobby.err.unsupported': 'Browser ini belum mendukung multiplayer (WebRTC).',
+      'lobby.ended': 'Host menutup lobby.', 'lobby.youKicked': 'Host mengeluarkanmu dari lobby.', 'lobby.youLeft': 'Kamu keluar dari lobby.',
+      'lobby.shareText': 'Yuk gabung ke lobby-ku di Wolfpup Virtual Mall!',
       'sound.toggle': 'Suara nyala / mati', 'toast.soundOn': 'Suara menyala', 'toast.soundOff': 'Suara dimatikan',
       'tod.toggle': 'Ganti siang / malam', 'toast.day': 'Pencahayaan siang', 'toast.night': 'Pencahayaan malam',
       'toast.teleport': 'Kamu dipindahkan ke depan <b>{name}</b>',
@@ -1678,6 +1836,7 @@
       el.setAttribute('aria-pressed', String(el.getAttribute('data-lang') === lang));
     });
     $('#search').setAttribute('placeholder', t(activeTab === 'products' ? 'search.products' : 'search.spaces'));
+    if (window.MallLobby && $('#lb-start')) renderLobby();
 
     var wl = $('#welcome-list');
     if (wl) {
@@ -1750,6 +1909,13 @@
     var en = toMap(-6, MALL.maxZ - 0.6);
     ctx.fillStyle = '#ffb020';
     ctx.fillRect(en[0], en[1], 12 * s.sx, 2);
+    // pemain lain di lobby
+    if (window.MallLobby) MallLobby.players().forEach(function (pl) {
+      if (pl.isMe) return;
+      var q = toMap(pl.x, pl.z);
+      ctx.fillStyle = pl.color; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(q[0], q[1], 3.6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    });
     // pemain
     var cam = $('#cam');
     if (cam && cam.object3D) {
@@ -1922,6 +2088,9 @@
         else if ($('#welcome').style.display !== 'none') $('#welcome').style.display = 'none';
       } else if (k === 'e' && hoveredProduct) { openProduct(hoveredProduct.id); }
       else if (k === 'e' && hovered) { openUnit(hovered.id); }
+      else if (k === 'enter' && window.MallLobby && MallLobby.status().role) {
+        e.preventDefault(); setLobbyOpen(true); $('#lb-input').focus();
+      }
       else if (k === 'm') { $('#mapwrap').classList.toggle('hidden'); }
       else if (k === 'l') { $('#sidebar').classList.toggle('hidden'); }
     });
@@ -2028,6 +2197,197 @@
     world.attachPost(post);
   }
 
+  /* --------------------------- lobby multiplayer --------------------------- */
+  // Jaringan & avatar ada di mall-lobby.js; di sini hanya UI: buat/masuk lobby,
+  // undangan, daftar anggota, chat, dan modal untuk tamu yang membuka link undangan.
+  var LS_PROFILE = 'wolfpup-mall-profile-v1';
+  var lobbyReady = false, lobbyColor = 0, lobbyUnread = 0, lobbyHostName = '', worldWaiters = [];
+  function whenWorld(fn) { if (world && lobbyReady) fn(); else worldWaiters.push(fn); }
+  function lobbyProfile() { var p = loadJSON(LS_PROFILE, {}); return { name: typeof p.name === 'string' ? p.name : '', color: (p.color | 0) % 10 }; }
+
+  function colorPicker(el) {
+    el.textContent = '';
+    MallLobby.palette.forEach(function (c, i) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.style.background = c; b.setAttribute('aria-label', c);
+      b.setAttribute('aria-pressed', String(i === lobbyColor));
+      b.addEventListener('click', function () {
+        lobbyColor = i;
+        ['#lb-colors', '#lbj-colors'].forEach(function (sel) {
+          Array.prototype.forEach.call($(sel).children, function (x, j) { x.setAttribute('aria-pressed', String(j === i)); });
+        });
+      });
+      el.appendChild(b);
+    });
+  }
+
+  function selfForLobby() {
+    var cam = $('#cam'); if (!cam || !cam.object3D) return null;
+    var p = cam.object3D.position;
+    return { x: p.x, z: p.z, yaw: cam.object3D.rotation.y, moving: document.body.classList.contains('moving') };
+  }
+
+  function chatEl(name, color, text, sys) {
+    var d = document.createElement('div');
+    d.className = 'msg' + (sys ? ' sys' : '');
+    if (!sys) { var b = document.createElement('b'); b.style.color = color; b.textContent = name; d.appendChild(b); }
+    d.appendChild(document.createTextNode(text));          // teks dari pemain lain selalu sebagai teks, bukan HTML
+    return d;
+  }
+  function pushChat(name, color, text, sys) {
+    var box = $('#lb-msgs');
+    box.appendChild(chatEl(name, color, text, sys));
+    while (box.children.length > 80) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+    // ringkasan di layar (hilang sendiri)
+    var log = $('#chatlog'), item = chatEl(name, color, text, sys);
+    log.appendChild(item);
+    while (log.children.length > 4) log.removeChild(log.firstChild);
+    setTimeout(function () { item.classList.add('fade'); }, 8000);
+    setTimeout(function () { if (item.parentNode) item.parentNode.removeChild(item); }, 8800);
+    if ($('#lobby').classList.contains('hidden')) { lobbyUnread++; renderBadge(); }
+  }
+  function renderBadge() {
+    var b = $('#lb-badge');
+    b.hidden = !lobbyUnread; b.textContent = lobbyUnread > 9 ? '9+' : String(lobbyUnread);
+  }
+
+  function renderLobby() {
+    var st = MallLobby.status(), inSession = !!st.role, players = MallLobby.players();
+    $('#lb-start').hidden = inSession; $('#lb-session').hidden = !inSession;
+    $('.lb-intro').textContent = t('lobby.intro', { max: st.max });
+    $('#lb-count').textContent = inSession ? st.count + '/' + st.max : '0/' + st.max;
+    var host = players.filter(function (p) { return p.isHost; })[0];
+    if (host) lobbyHostName = host.name;
+    $('#lb-sub').textContent = !inSession ? '' : st.role === 'host' ? t('lobby.subHost') : t('lobby.subGuest', { host: lobbyHostName });
+    $('#lb-invite').hidden = st.role !== 'host';
+    $('#lb-link').value = st.invite || '';
+    $('#lb-share').hidden = !(st.role === 'host' && navigator.share);
+    $('#lb-leave').textContent = st.role === 'host' ? t('lobby.end') : t('lobby.leave');
+    var ul = $('#lb-members'); ul.textContent = '';
+    players.forEach(function (p) {
+      var li = document.createElement('li');
+      var av = document.createElement('span'); av.className = 'av'; av.style.background = p.color; av.textContent = (p.name || '?').charAt(0).toUpperCase();
+      var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name;
+      li.appendChild(av); li.appendChild(nm);
+      var tags = [];
+      if (p.isHost) tags.push(t('lobby.hostTag'));
+      if (p.isMe) tags.push(t('lobby.you'));
+      if (tags.length) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = tags.join(' · '); li.appendChild(tg); }
+      if (st.role === 'host' && !p.isMe) {
+        var k = document.createElement('button'); k.className = 'kick'; k.type = 'button'; k.textContent = t('lobby.kick');
+        k.addEventListener('click', function () { MallLobby.kick(p.id); });
+        li.appendChild(k);
+      }
+      ul.appendChild(li);
+    });
+  }
+
+  function clearLobbyUrl() {
+    var u = new URL(location.href);
+    if (!u.searchParams.has('lobby')) return;
+    u.searchParams.delete('lobby');
+    history.replaceState(null, '', u.pathname + (u.search ? u.search : '') + u.hash);
+  }
+
+  function onLobbyEvent(type, d) {
+    if (type === 'state' || type === 'players') renderLobby();
+    else if (type === 'chat') pushChat(d.name, d.color, d.text, false);
+    else if (type === 'system') pushChat('', '', t(d.key, { name: d.name }), true);
+    else if (type === 'ended') { toast(t('lobby.ended'), 'warn'); clearLobbyUrl(); renderLobby(); }
+    else if (type === 'kicked') { toast(t('lobby.youKicked'), 'warn'); clearLobbyUrl(); renderLobby(); }
+  }
+
+  function setLobbyOpen(open) {
+    $('#lobby').classList.toggle('hidden', !open);
+    document.body.classList.toggle('lobby-open', open);
+    $('#btn-lobby').classList.toggle('on', open);
+    if (open) { lobbyUnread = 0; renderBadge(); }
+  }
+
+  function lobbyErrorText(err) {
+    var code = err && err.type;
+    var key = 'lobby.err.' + (['full', 'notfound', 'timeout', 'closed', 'network'].indexOf(code) >= 0 ? code : 'network');
+    return t(key, { max: MallLobby.max });
+  }
+
+  function initLobbyUI() {
+    var prof = lobbyProfile();
+    lobbyColor = prof.color;
+    colorPicker($('#lb-colors')); colorPicker($('#lbj-colors'));
+    $('#lb-name').value = prof.name; $('#lbj-name').value = prof.name;
+    var supported = !!(window.MallLobby && MallLobby.available() && window.RTCPeerConnection);
+
+    $('#btn-lobby').addEventListener('click', function () { setLobbyOpen($('#lobby').classList.contains('hidden')); });
+    $('#lb-close').addEventListener('click', function () { setLobbyOpen(false); });
+
+    $('#lb-host').addEventListener('click', function () {
+      var note = $('#lb-start-note'), name = $('#lb-name').value.trim();
+      note.classList.remove('err');
+      if (!supported) { note.textContent = t('lobby.err.unsupported'); note.classList.add('err'); return; }
+      if (!name) { note.textContent = t('lobby.needName'); note.classList.add('err'); $('#lb-name').focus(); return; }
+      saveJSON(LS_PROFILE, { name: name, color: lobbyColor });
+      note.textContent = t('lobby.creating'); this.disabled = true;
+      var btn = this;
+      whenWorld(function () {
+        MallLobby.host(name, lobbyColor).then(function () {
+          note.textContent = ''; btn.disabled = false;
+          renderLobby(); toast(t('lobby.created'), 'good');
+        }).catch(function (err) {
+          btn.disabled = false; note.textContent = lobbyErrorText(err); note.classList.add('err');
+        });
+      });
+    });
+
+    $('#lb-copy').addEventListener('click', function () {
+      var link = $('#lb-link').value; if (!link) return;
+      var done = function () { toast(t('lobby.copied'), 'good'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, function () { $('#lb-link').select(); document.execCommand('copy'); done(); });
+      else { $('#lb-link').select(); document.execCommand('copy'); done(); }
+    });
+    $('#lb-share').addEventListener('click', function () {
+      if (navigator.share) navigator.share({ title: 'Wolfpup Virtual Mall', text: t('lobby.shareText'), url: $('#lb-link').value }).catch(function () {});
+    });
+    $('#lb-leave').addEventListener('click', function () {
+      MallLobby.leave(); clearLobbyUrl(); renderLobby(); toast(t('lobby.youLeft'));
+    });
+    $('#lb-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var inp = $('#lb-input');
+      if (MallLobby.sendChat(inp.value)) inp.value = '';
+    });
+    $('#lb-input').addEventListener('keydown', function (e) { if (e.key === 'Escape') this.blur(); });
+
+    // tamu dari link undangan → modal masuk lobby menggantikan layar selamat datang
+    var invite = window.MallLobby ? MallLobby.lobbyFromUrl() : '';
+    if (invite) {
+      $('#welcome').style.display = 'none';
+      $('#lb-join').hidden = false;
+      if (!supported) { $('#lbj-status').textContent = t('lobby.err.unsupported'); $('#lbj-status').classList.add('err'); $('#lbj-go').disabled = true; }
+      $('#lbj-solo').addEventListener('click', function () { $('#lb-join').hidden = true; clearLobbyUrl(); if (window.MallAudio) MallAudio.start(); });
+      $('#lbj-go').addEventListener('click', function () {
+        var st = $('#lbj-status'), name = $('#lbj-name').value.trim(), btn = this;
+        st.classList.remove('err');
+        if (!name) { st.textContent = t('lobby.needName'); st.classList.add('err'); $('#lbj-name').focus(); return; }
+        saveJSON(LS_PROFILE, { name: name, color: lobbyColor });
+        $('#lb-name').value = name;
+        if (window.MallAudio) MallAudio.start();
+        st.textContent = t('lobby.connecting'); btn.disabled = true;
+        whenWorld(function () {
+          MallLobby.join(invite, name, lobbyColor).then(function () {
+            $('#lb-join').hidden = true; btn.disabled = false; st.textContent = '';
+            renderLobby(); setLobbyOpen(!window.matchMedia('(max-width: 820px)').matches);
+            toast(t('lobby.welcome'), 'good');
+          }).catch(function (err) {
+            btn.disabled = false; st.textContent = lobbyErrorText(err); st.classList.add('err');
+          });
+        });
+      });
+      $('#lbj-name').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#lbj-go').click(); });
+    }
+    renderLobby();
+  }
+
   function buildWorld() {
     var bar = $('#loader-bar'), label = $('#loader-label');
     MallWorld.create(worldContext(function (f, key) {
@@ -2035,6 +2395,11 @@
       label.textContent = t('load.' + key);
     })).then(function (w) {
       world = w;
+      if (window.MallLobby) {
+        MallLobby.setup({ sceneEl: document.getElementById('scene'), getSelf: selfForLobby, on: onLobbyEvent });
+        lobbyReady = true;
+        worldWaiters.splice(0).forEach(function (fn) { fn(); });
+      }
       if (window.MallPost) attachPost();
       else window.addEventListener('mallpost-ready', attachPost, { once: true });
       showTod();
@@ -2056,6 +2421,7 @@
     buildData();
     initUI();
     applyLang(lang);
+    initLobbyUI();
     // pastikan komponen jalan kaki aktif (didaftarkan setelah scene di-parse)
     var cam = document.getElementById('cam');
     if (cam) cam.setAttribute('mall-controls', '');
