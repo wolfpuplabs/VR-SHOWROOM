@@ -9,14 +9,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet">
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<script src="mall-world.js?v=202610091559"></script>
-<script src="mall-sky.js?v=202610091559"></script>
+<script src="mall-world.js?v=202610100559"></script>
+<script src="mall-sky.js?v=202610100559"></script>
 <script src="vendor/peerjs/peerjs.min.js"></script>
-<script src="mall-lobby.js?v=202610091559"></script>
-<script src="mall-audio.js?v=202610091559"></script>
+<script src="mall-lobby.js?v=202610100559"></script>
+<script src="mall-audio.js?v=202610100559"></script>
 <!-- modul contoh three.js (post-processing) memakai THREE milik A-Frame lewat shim -->
 <script type="importmap">{ "imports": { "three": "./vendor/three/three-shim.js" } }</script>
-<script type="module" src="mall-post.js?v=202610091559"></script>
+<script type="module" src="mall-post.js?v=202610100559"></script>
 <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 <style>
   :root{
@@ -251,9 +251,20 @@
   .lb-head b{display:block;font-size:15px}
   .lb-head small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .lb-count{font-size:12px;font-weight:700;color:var(--muted);background:rgba(255,255,255,.06);padding:4px 8px;border-radius:8px}
-  .lb-body{padding:12px 16px 14px;display:flex;flex-direction:column;gap:8px;min-height:0;flex:1}
-  #lb-session{gap:10px}
-  .lb-body[hidden],#lb-invite[hidden],#lb-share[hidden]{display:none}
+  .lb-body{padding:12px 16px 14px;display:flex;flex-direction:column;gap:8px;min-height:0;flex:1;overflow-y:auto}
+  #lobby [hidden]{display:none !important}
+  #lb-roombox,#lb-profile,#lb-session{display:flex;flex-direction:column;gap:8px}
+  #lb-session{flex:1;min-height:260px}
+  .lb-sep{height:1px;background:var(--stroke);margin:6px 0 2px}
+  .lb-seg{width:100%}
+  .lb-seg button{flex:1;padding:9px 10px;font-size:12.5px}
+  .lb-desc{margin:2px 0 0;font-size:12px;color:var(--muted);line-height:1.5}
+  .lb-check{display:flex;align-items:center;gap:9px;font-size:13px;cursor:pointer;margin-top:4px}
+  .lb-check input{width:17px;height:17px;accent-color:var(--brand);margin:0}
+  .lb-status{margin:0;font-size:12.5px;color:var(--ok)}
+  .lb-status.wait{color:var(--brand)}
+  .lb-rolechip{margin:0 0 4px;font-size:12.5px;color:var(--muted)}
+  .lb-rolechip b{color:var(--text);background:rgba(255,176,32,.16);border:1px solid rgba(255,176,32,.35);border-radius:999px;padding:2px 10px;margin-left:4px}
   .lb-intro{margin:0;color:var(--muted);font-size:12.5px;line-height:1.55}
   .lb-label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
   .lb-input{font:inherit;font-size:13px;color:var(--text);background:rgba(255,255,255,.05);border:1px solid var(--stroke);
@@ -295,13 +306,12 @@
   #lb-join .sheet-body{display:flex;flex-direction:column;gap:8px}
   .row-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
 
-  /* ---------- mode berbagi (lobby): tanpa UI leasing ---------- */
-  body.share-mode .occwrap,
-  body.share-mode #tabs [data-tab="spaces"],
-  body.share-mode #filters,
-  body.share-mode #side-foot,
-  body.share-mode #modal{display:none !important}
-  body.share-mode #tabs [data-tab="products"]{flex:1}
+  /* ---------- mode visitor (dari link undangan): tanpa UI leasing ---------- */
+  body.visitor-mode .occwrap,
+  body.visitor-mode #tabs [data-tab="spaces"],
+  body.visitor-mode #filters,
+  body.visitor-mode #side-foot{display:none !important}
+  body.visitor-mode #tabs [data-tab="products"]{flex:1}
 
   /* ---------- welcome ---------- */
   #welcome{position:absolute;z-index:60;inset:0;display:grid;place-items:center;padding:16px;
@@ -415,9 +425,9 @@
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4 3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/></svg>
         <span class="lbl" data-i18n="btn.map">Map</span>
       </button>
-      <button class="tb" id="btn-lobby" data-i18n-title="lobby.title" title="Lobby">
+      <button class="tb" id="btn-lobby" data-i18n-title="share.title" title="Share">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.2A4.5 4.5 0 0 1 21 18.5"/></svg>
-        <span class="lbl" data-i18n="lobby.btn">Lobby</span>
+        <span class="lbl" data-i18n="lobby.btn">Share</span>
         <i class="badge" id="lb-badge" hidden></i>
       </button>
       <span class="sep"></span>
@@ -465,57 +475,72 @@
     <canvas id="minimap" width="150" height="205"></canvas>
   </div>
 
-  <!-- lobby multiplayer: host / anggota / undangan / chat -->
-  <aside id="lobby" class="pe hidden" aria-label="Lobby">
+  <!-- bagikan: link undangan (Visitor / Tenant) + ruang jalan bareng tanpa host -->
+  <aside id="lobby" class="pe hidden" aria-label="Share">
     <div class="lb-head">
-      <div><b data-i18n="lobby.title">Lobby</b><small id="lb-sub"></small></div>
-      <span class="lb-count" id="lb-count"></span>
+      <div><b data-i18n="share.title">Share &amp; walk together</b><small id="lb-sub"></small></div>
+      <span class="lb-count" id="lb-count" hidden></span>
       <button class="tb" id="lb-close" aria-label="Close">✕</button>
     </div>
-    <div id="lb-start" class="lb-body">
-      <p class="lb-intro" data-i18n="lobby.intro">Host a lobby, share the invite link, and walk the mall together with friends.</p>
-      <label class="lb-label" for="lb-name" data-i18n="lobby.name">Your name</label>
-      <input id="lb-name" class="lb-input" maxlength="20" autocomplete="nickname" data-i18n-placeholder="lobby.namePh" placeholder="e.g. Rina">
-      <div class="lb-label" data-i18n="lobby.color">Character colour</div>
-      <div class="lb-colors" id="lb-colors"></div>
-      <button class="btn primary lb-wide" id="lb-host" data-i18n="lobby.host">Host a lobby</button>
-      <p class="lb-note" id="lb-start-note"></p>
-    </div>
-    <div id="lb-session" class="lb-body" hidden>
-      <div id="lb-invite">
-        <div class="lb-label" data-i18n="lobby.invite">Invite link</div>
-        <div class="lb-linkrow"><input id="lb-link" class="lb-input" readonly><button class="btn ghost" id="lb-copy" data-i18n="lobby.copy">Copy</button></div>
-        <button class="btn ghost lb-wide" id="lb-share" hidden data-i18n="lobby.share">Share invite…</button>
+    <div class="lb-body">
+      <div id="lb-modebox">
+        <div class="lb-label" data-i18n="share.inviteAs">Invite as</div>
+        <div class="seg lb-seg" id="lb-mode">
+          <button type="button" data-mode="visitor" aria-pressed="true" data-i18n="role.visitor">Visitor</button>
+          <button type="button" data-mode="tenant" aria-pressed="false" data-i18n="role.tenant">Tenant</button>
+        </div>
+        <p class="lb-desc" id="lb-mode-desc"></p>
       </div>
-      <ul id="lb-members"></ul>
-      <div id="lb-msgs" aria-live="polite"></div>
-      <form id="lb-form" autocomplete="off">
-        <input id="lb-input" class="lb-input" maxlength="200" data-i18n-placeholder="lobby.chatPh" placeholder="Type a message…">
-        <button class="btn primary" type="submit" data-i18n="lobby.send">Send</button>
-      </form>
-      <button class="btn ghost lb-wide" id="lb-leave"></button>
+      <label class="lb-check"><input type="checkbox" id="lb-together" checked><span id="lb-together-lbl">Walk together</span></label>
+      <div class="lb-label" data-i18n="lobby.invite">Invite link</div>
+      <div class="lb-linkrow"><input id="lb-link" class="lb-input" readonly aria-label="Invite link"><button class="btn ghost" id="lb-copy" type="button" data-i18n="lobby.copy">Copy</button></div>
+      <button class="btn primary lb-wide" id="lb-share" type="button" data-i18n="lobby.share">Share invite…</button>
+      <p class="lb-note" id="lb-nohost"></p>
+      <div id="lb-roombox">
+        <div id="lb-profile">
+          <div class="lb-sep"></div>
+          <label class="lb-label" for="lb-name" data-i18n="lobby.name">Your name</label>
+          <input id="lb-name" class="lb-input" maxlength="20" autocomplete="nickname" data-i18n-placeholder="lobby.namePh" placeholder="e.g. Rina">
+          <div class="lb-label" data-i18n="lobby.color">Character colour</div>
+          <div class="lb-colors" id="lb-colors"></div>
+          <button class="btn ghost lb-wide" id="lb-enter" type="button" data-i18n="share.enter">Enter the room now</button>
+          <p class="lb-note" id="lb-start-note"></p>
+        </div>
+        <div id="lb-session" hidden>
+          <div class="lb-sep"></div>
+          <p class="lb-status" id="lb-status"></p>
+          <ul id="lb-members"></ul>
+          <div id="lb-msgs" aria-live="polite"></div>
+          <form id="lb-form" autocomplete="off">
+            <input id="lb-input" class="lb-input" maxlength="200" data-i18n-placeholder="lobby.chatPh" placeholder="Type a message…">
+            <button class="btn primary" type="submit" data-i18n="lobby.send">Send</button>
+          </form>
+          <button class="btn ghost lb-wide" id="lb-leave" type="button" data-i18n="share.leave">Leave the room</button>
+        </div>
+      </div>
     </div>
   </aside>
 
   <!-- ringkasan chat di layar saat panel tertutup -->
   <div id="chatlog" aria-hidden="true"></div>
 
-  <!-- tamu yang membuka link undangan -->
+  <!-- orang yang membuka link undangan dengan ruang -->
   <div id="lb-join" class="pe" hidden>
     <div class="sheet">
       <div class="sheet-head"><div>
-        <h2 data-i18n="lobby.joinTitle">You're invited to a lobby</h2>
-        <p data-i18n="lobby.joinSub">Pick a name and colour — your character will walk the mall with everyone in the lobby.</p>
+        <h2 data-i18n="share.joinTitle">You're invited to the Wolfpup Virtual Mall</h2>
+        <p data-i18n="share.joinSub">Pick a name and colour — your character walks the mall with everyone else who opened this link.</p>
       </div></div>
       <div class="sheet-body">
+        <p class="lb-rolechip" id="lbj-role"></p>
         <label class="lb-label" for="lbj-name" data-i18n="lobby.name">Your name</label>
         <input id="lbj-name" class="lb-input" maxlength="20" autocomplete="nickname" data-i18n-placeholder="lobby.namePh" placeholder="e.g. Rina">
         <div class="lb-label" data-i18n="lobby.color">Character colour</div>
         <div class="lb-colors" id="lbj-colors"></div>
         <p class="lb-note" id="lbj-status"></p>
         <div class="row-btns">
-          <button class="btn ghost" id="lbj-solo" data-i18n="lobby.solo">Explore alone</button>
-          <button class="btn primary" id="lbj-go" data-i18n="lobby.join">Join lobby</button>
+          <button class="btn ghost" id="lbj-solo" type="button" data-i18n="lobby.solo">Explore alone</button>
+          <button class="btn primary" id="lbj-go" type="button" data-i18n="share.joinGo">Walk together</button>
         </div>
       </div>
     </div>
@@ -718,7 +743,7 @@
       'q.label': 'Graphics', 'q.auto': 'Auto', 'q.low': 'Low', 'q.medium': 'Medium', 'q.high': 'High',
       'q.active': 'running: {q}',
       'tod.label': 'Lighting', 'tod.auto': 'Auto (clock)', 'tod.day': 'Day', 'tod.night': 'Night',
-      'lobby.btn': 'Lobby', 'lobby.title': 'Lobby', 'lobby.intro': 'Host a lobby, share the invite link, and walk the mall together with friends — up to {max} people per session. Inside a lobby the mall switches to explore mode: products only, no leasing.',
+      'lobby.btn': 'Share', 'lobby.title': 'Share', 'lobby.intro': 'Host a lobby, share the invite link, and walk the mall together with friends — up to {max} people per session. Inside a lobby the mall switches to explore mode: products only, no leasing.',
       'lobby.name': 'Your name', 'lobby.namePh': 'e.g. Rina', 'lobby.color': 'Character colour', 'lobby.host': 'Host a lobby',
       'lobby.invite': 'Invite link', 'lobby.copy': 'Copy', 'lobby.copied': 'Invite link copied', 'lobby.share': 'Share invite…',
       'lobby.chatPh': 'Type a message…', 'lobby.send': 'Send', 'lobby.leave': 'Leave lobby', 'lobby.end': 'End lobby for everyone',
@@ -726,14 +751,34 @@
       'lobby.subGuest': 'Connected to {host}', 'lobby.connecting': 'Connecting…', 'lobby.creating': 'Creating lobby…',
       'lobby.joinTitle': "You're invited to a lobby", 'lobby.joinSub': 'Pick a name and colour — your character will walk the mall with everyone in the lobby.',
       'lobby.join': 'Join lobby', 'lobby.solo': 'Explore alone', 'lobby.needName': 'Please type your name first.',
-      'lobby.joined': '{name} joined the lobby', 'lobby.left': '{name} left the lobby', 'lobby.kicked': '{name} was removed by the host',
-      'lobby.welcome': 'You joined the lobby — say hi!', 'lobby.created': 'Lobby created — share the invite link',
-      'lobby.err.full': 'This lobby is full ({max}/{max}). Ask the host to make room, or explore alone.',
-      'lobby.err.notfound': "Lobby not found — the host may have closed it.", 'lobby.err.timeout': 'Could not reach the lobby (timed out). Check your connection and try again.',
-      'lobby.err.network': 'Network error — could not connect to the lobby service.', 'lobby.err.closed': 'The host closed the connection.',
+      'lobby.joined': '{name} joined', 'lobby.left': '{name} left', 'lobby.kicked': '{name} was removed by the host',
+      'lobby.welcome': "You're in the room — say hi!", 'lobby.created': 'Lobby created — share the invite link',
+      'lobby.err.full': 'This room is full ({max}/{max}). You can still explore on your own.',
+      'lobby.err.notfound': "Lobby not found — the host may have closed it.", 'lobby.err.timeout': 'Could not reach the room (timed out). Check your connection and try again.',
+      'lobby.err.network': 'Could not reach the room service (network). You can still explore on your own — try again later.', 'lobby.err.closed': 'The host closed the connection.',
       'lobby.err.unsupported': 'This browser does not support multiplayer (WebRTC).',
       'lobby.ended': 'The host ended the lobby.', 'lobby.youKicked': 'The host removed you from the lobby.', 'lobby.youLeft': 'You left the lobby.',
       'lobby.shareText': 'Join me in the Wolfpup Virtual Mall lobby!',
+      'share.title': 'Share & walk together', 'share.inviteAs': 'Invite as',
+      'role.visitor': 'Visitor', 'role.tenant': 'Tenant', 'role.owner': 'Owner',
+      'share.desc.visitor': 'Visitors explore the mall, open shop info and view products in 3D & AR. Leasing is hidden.',
+      'share.desc.tenant': 'Tenants get everything visitors get, plus the leasing tools: available spaces, prices and the rent form.',
+      'share.together': 'Walk together in a live room (max {max} people)',
+      'share.noHostRoom': "No host needed: the link keeps working when you're offline. Whoever opens it first keeps the room running.",
+      'share.noHostSolo': 'No host needed: people who open this link explore on their own.',
+      'share.enter': 'Enter the room now', 'share.leave': 'Leave the room', 'share.youLeft': 'You left the room.',
+      'share.joinTitle': "You're invited to the Wolfpup Virtual Mall",
+      'share.joinSub': 'Pick a name and colour — your character walks the mall with everyone else who opened this link.',
+      'share.joinAs': 'You are joining as', 'share.joinGo': 'Walk together', 'share.youAre': 'You: {role}',
+      'share.st.live': 'In the room · {n} other(s) here', 'share.st.alone': "In the room · you're the first one here — others appear as they open the link",
+      'share.st.reconnecting': 'Reconnecting to the room…',
+      'share.copyManual': 'Copy blocked by the browser — the link is selected, copy it manually.',
+      'share.text.visitor': 'Come explore the Wolfpup Virtual Mall with me!',
+      'share.text.tenant': 'Tenant access to the Wolfpup Virtual Mall — browse and rent spaces.',
+      'lobby.handover': 'Connection hand-over — reconnecting the room…', 'hint.shopInfo': 'click for shop info',
+      'sheet.location': 'Location',
+      'welcome.3v': '<b>Click a shop front</b> (or press <kbd>E</kbd> while hovering) for shop info and products',
+      'brand.subVisitor': 'Ground Floor · Visitor', 'brand.subTenant': 'Ground Floor · Tenant access',
       'sound.toggle': 'Sound on / off', 'toast.soundOn': 'Sound on', 'toast.soundOff': 'Sound off',
       'tod.toggle': 'Switch day / night', 'toast.day': 'Daytime lighting', 'toast.night': 'Night lighting',
       'toast.teleport': 'Moved to the front of <b>{name}</b>',
@@ -827,7 +872,7 @@
       'q.label': 'Grafis', 'q.auto': 'Otomatis', 'q.low': 'Rendah', 'q.medium': 'Sedang', 'q.high': 'Tinggi',
       'q.active': 'berjalan: {q}',
       'tod.label': 'Pencahayaan', 'tod.auto': 'Otomatis (jam)', 'tod.day': 'Siang', 'tod.night': 'Malam',
-      'lobby.btn': 'Lobby', 'lobby.title': 'Lobby', 'lobby.intro': 'Jadi host lobby, bagikan link undangan, lalu jalan-jalan di mall bareng teman — maks. {max} orang per sesi. Selama di lobby, mall masuk mode jelajah: hanya produk, tanpa leasing.',
+      'lobby.btn': 'Bagikan', 'lobby.title': 'Bagikan', 'lobby.intro': 'Jadi host lobby, bagikan link undangan, lalu jalan-jalan di mall bareng teman — maks. {max} orang per sesi. Selama di lobby, mall masuk mode jelajah: hanya produk, tanpa leasing.',
       'lobby.name': 'Nama kamu', 'lobby.namePh': 'mis. Rina', 'lobby.color': 'Warna karakter', 'lobby.host': 'Buat lobby',
       'lobby.invite': 'Link undangan', 'lobby.copy': 'Salin', 'lobby.copied': 'Link undangan disalin', 'lobby.share': 'Bagikan undangan…',
       'lobby.chatPh': 'Ketik pesan…', 'lobby.send': 'Kirim', 'lobby.leave': 'Keluar dari lobby', 'lobby.end': 'Tutup lobby untuk semua',
@@ -835,14 +880,34 @@
       'lobby.subGuest': 'Tersambung ke {host}', 'lobby.connecting': 'Menyambungkan…', 'lobby.creating': 'Membuat lobby…',
       'lobby.joinTitle': 'Kamu diundang ke lobby', 'lobby.joinSub': 'Pilih nama dan warna — karaktermu akan jalan-jalan di mall bersama semua orang di lobby.',
       'lobby.join': 'Masuk lobby', 'lobby.solo': 'Jelajah sendiri', 'lobby.needName': 'Tulis namamu dulu.',
-      'lobby.joined': '{name} masuk ke lobby', 'lobby.left': '{name} keluar dari lobby', 'lobby.kicked': '{name} dikeluarkan oleh host',
-      'lobby.welcome': 'Kamu masuk ke lobby — sapa yang lain!', 'lobby.created': 'Lobby dibuat — bagikan link undangannya',
-      'lobby.err.full': 'Lobby ini penuh ({max}/{max}). Minta host memberi tempat, atau jelajah sendiri.',
-      'lobby.err.notfound': 'Lobby tidak ditemukan — mungkin host sudah menutupnya.', 'lobby.err.timeout': 'Tidak bisa menjangkau lobby (waktu habis). Cek koneksi lalu coba lagi.',
-      'lobby.err.network': 'Gangguan jaringan — tidak bisa tersambung ke layanan lobby.', 'lobby.err.closed': 'Host menutup koneksi.',
+      'lobby.joined': '{name} bergabung', 'lobby.left': '{name} keluar', 'lobby.kicked': '{name} dikeluarkan oleh host',
+      'lobby.welcome': 'Kamu sudah di ruang — sapa yang lain!', 'lobby.created': 'Lobby dibuat — bagikan link undangannya',
+      'lobby.err.full': 'Ruang ini penuh ({max}/{max}). Kamu tetap bisa menjelajah sendiri.',
+      'lobby.err.notfound': 'Lobby tidak ditemukan — mungkin host sudah menutupnya.', 'lobby.err.timeout': 'Tidak bisa menjangkau ruang (waktu habis). Cek koneksi lalu coba lagi.',
+      'lobby.err.network': 'Tidak bisa menjangkau layanan ruang (jaringan). Kamu tetap bisa menjelajah sendiri — coba lagi nanti.', 'lobby.err.closed': 'Host menutup koneksi.',
       'lobby.err.unsupported': 'Browser ini belum mendukung multiplayer (WebRTC).',
       'lobby.ended': 'Host menutup lobby.', 'lobby.youKicked': 'Host mengeluarkanmu dari lobby.', 'lobby.youLeft': 'Kamu keluar dari lobby.',
       'lobby.shareText': 'Yuk gabung ke lobby-ku di Wolfpup Virtual Mall!',
+      'share.title': 'Bagikan & jalan bareng', 'share.inviteAs': 'Undang sebagai',
+      'role.visitor': 'Visitor', 'role.tenant': 'Tenant', 'role.owner': 'Pemilik',
+      'share.desc.visitor': 'Visitor menjelajah mall, membuka info toko, dan melihat produk dalam 3D & AR. Leasing disembunyikan.',
+      'share.desc.tenant': 'Tenant mendapat semua yang didapat visitor, plus fitur leasing: space tersedia, harga, dan form sewa.',
+      'share.together': 'Jalan bareng di ruang live (maks. {max} orang)',
+      'share.noHostRoom': 'Tidak perlu host: link tetap jalan walau kamu offline. Siapa pun yang membuka link lebih dulu yang menjalankan ruangnya.',
+      'share.noHostSolo': 'Tidak perlu host: orang yang membuka link ini menjelajah sendiri.',
+      'share.enter': 'Masuk ruang sekarang', 'share.leave': 'Keluar dari ruang', 'share.youLeft': 'Kamu keluar dari ruang.',
+      'share.joinTitle': 'Kamu diundang ke Wolfpup Virtual Mall',
+      'share.joinSub': 'Pilih nama dan warna — karaktermu jalan-jalan di mall bersama semua orang yang membuka link ini.',
+      'share.joinAs': 'Kamu masuk sebagai', 'share.joinGo': 'Jalan bareng', 'share.youAre': 'Kamu: {role}',
+      'share.st.live': 'Di ruang · {n} orang lain di sini', 'share.st.alone': 'Di ruang · kamu yang pertama — yang lain muncul saat membuka link',
+      'share.st.reconnecting': 'Menyambung ulang ke ruang…',
+      'share.copyManual': 'Browser memblokir salin — link sudah dipilih, salin secara manual.',
+      'share.text.visitor': 'Yuk jelajah Wolfpup Virtual Mall bareng!',
+      'share.text.tenant': 'Akses tenant Wolfpup Virtual Mall — lihat dan sewa space.',
+      'lobby.handover': 'Pindah koneksi — menyambung ulang ruang…', 'hint.shopInfo': 'klik untuk info toko',
+      'sheet.location': 'Lokasi',
+      'welcome.3v': '<b>Klik etalase toko</b> (atau tekan <kbd>E</kbd> saat hover) untuk info toko dan produk',
+      'brand.subVisitor': 'Lantai Dasar · Visitor', 'brand.subTenant': 'Lantai Dasar · Akses tenant',
       'sound.toggle': 'Suara nyala / mati', 'toast.soundOn': 'Suara menyala', 'toast.soundOff': 'Suara dimatikan',
       'tod.toggle': 'Ganti siang / malam', 'toast.day': 'Pencahayaan siang', 'toast.night': 'Pencahayaan malam',
       'toast.teleport': 'Kamu dipindahkan ke depan <b>{name}</b>',
@@ -1149,31 +1214,37 @@
 
   function updateUnitVisual(u) { if (world) world.updateUnit(u); }
 
-  // Mode berbagi = sedang di lobby (host atau tamu): semua UI leasing disembunyikan,
-  // pengunjung hanya menjelajah dan berinteraksi dengan produk.
-  function shareMode() { return !!(window.MallLobby && MallLobby.status().role); }
-  function applyShareMode() {
-    var on = shareMode(), was = document.body.classList.contains('share-mode');
-    document.body.classList.toggle('share-mode', on);
+  // Mode tampilan dari link undangan:
+  //   ?mode=visitor → tanpa UI leasing: jelajah, info toko & produk saja
+  //   ?mode=tenant  → tampilan lengkap termasuk leasing
+  //   tanpa mode    → pemilik/pengelola (lengkap). Link lama ?lobby=… dianggap visitor.
+  var VIEW_MODE = (function () {
+    var q = new URLSearchParams(location.search), m = q.get('mode');
+    if (m === 'visitor' || m === 'tenant') return m;
+    return q.get('lobby') ? 'visitor' : 'owner';
+  })();
+  function visitorMode() { return VIEW_MODE === 'visitor'; }
+  function applyViewMode() {
+    var on = visitorMode();
+    document.body.classList.toggle('visitor-mode', on);
     if (world && world.setLeasingUI) world.setLeasingUI(!on);
-    if (on && !was) {
-      if (modalEl.classList.contains('open')) { modalEl.classList.remove('open'); openUnitId = null; }
+    if (on) {
       var pt = document.querySelector('#tabs [data-tab="products"]');
       if (pt && pt.getAttribute('aria-pressed') !== 'true') pt.click();
-      var pop = $('#stats'); if (pop) { pop.classList.remove('open'); $('#btn-occ').setAttribute('aria-expanded', 'false'); }
     }
+    var key = VIEW_MODE === 'visitor' ? 'brand.subVisitor' : VIEW_MODE === 'tenant' ? 'brand.subTenant' : 'brand.sub';
     var sub = $('.brand small');
-    if (sub) { sub.setAttribute('data-i18n', on ? 'brand.subShare' : 'brand.sub'); sub.innerHTML = t(on ? 'brand.subShare' : 'brand.sub'); }
-    if (on !== was) drawMap();
+    if (sub) { sub.setAttribute('data-i18n', key); sub.innerHTML = t(key); }
+    drawMap();
   }
 
   function onWorldHover(target) {
-    if (target && shareMode()) {
-      // unit: tampilkan nama tenant saja (tanpa harga/sewa); unit kosong & meja leasing tidak interaktif
+    if (target && visitorMode()) {
+      // unit: nama tenant + info toko (tanpa harga/sewa); unit kosong & meja leasing tidak interaktif
       if (target.unit) {
         var su = target.unit;
         if (su.baseStatus !== 'rented' || !su.tenant) target = null;
-        else target = { text: '<b>' + esc(su.tenant) + '</b> &middot; ' + esc(L(su.cat)) };
+        else target = { unit: su, text: '<b>' + esc(su.tenant) + '</b> &middot; ' + esc(L(su.cat)) + ' &mdash; ' + t('hint.shopInfo') };
       } else if (target.text === t('hint.leasing')) target = null;
       else if (target.text === t('hint.directory')) target = { text: t('hint.directoryShare') };
     }
@@ -1255,11 +1326,11 @@
         };
       },
       onHover: onWorldHover,
-      onUnitClick: guarded(function (u) { if (!shareMode()) openUnit(u.id); }),
+      onUnitClick: guarded(function (u) { openUnit(u.id); }),
       onProductClick: guarded(function (pr) { openProduct(pr.id); }),
       onShowroom: guarded(function () { openProduct('P-A4-1'); }),   // mobil ukuran asli → panel produk + AR
-      onDirectory: guarded(function () { if (shareMode()) openSidebar('products'); else openSidebar('spaces', 'all'); }),
-      onLeasing: guarded(function () { if (!shareMode()) openSidebar('spaces', 'available'); }),
+      onDirectory: guarded(function () { if (visitorMode()) openSidebar('products'); else openSidebar('spaces', 'all'); }),
+      onLeasing: guarded(function () { if (!visitorMode()) openSidebar('spaces', 'available'); }),
       progress: progress
     };
   }
@@ -1579,7 +1650,7 @@
 
   function openUnit(id) {
     var u = BY_ID[id];
-    if (!u || shareMode()) return;
+    if (!u) return;
     openUnitId = id;
     var st = statusOf(u);
     var facil = L(u.facilities).map(function (f) { return '<em>' + esc(f) + '</em>'; }).join('');
@@ -1609,6 +1680,31 @@
           return '<em style="cursor:pointer;border-color:var(--stroke-strong)" data-product="' + pr.id + '">' +
             esc(L(pr.name)) + ' &middot; ' + shortRp(pr.price) + ' &middot; ' + t('card.viewAr') + '</em>';
         }).join('') + '</div>';
+    }
+
+    if (visitorMode()) {
+      // visitor: kartu info toko + produk, tanpa harga sewa / form / waitlist
+      if (u.baseStatus !== 'rented' || !u.tenant) return;
+      sheetEl.innerHTML =
+        '<div class="sheet-head"><div style="flex:1">' +
+          '<h2>' + esc(u.tenant) + '</h2>' +
+          '<p>' + esc(L(u.cat)) + ' &middot; ' + esc(L(u.tagline)) + '</p>' +
+        '</div><button class="btn ghost" data-close>&times;</button></div>' +
+        '<div class="sheet-body">' + prodBlock +
+          '<div class="summary">' +
+            '<div class="line"><span>' + t('sheet.tenant') + '</span><b>' + esc(u.tenant) + '</b></div>' +
+            '<div class="line"><span>' + t('b.category') + '</span><b>' + esc(L(u.cat)) + '</b></div>' +
+            '<div class="line"><span>' + t('sheet.location') + '</span><b>' + unitName(u) + '</b></div>' +
+            '<div class="line"><span>' + t('sheet.products') + '</span><b>' + u.products.length + '</b></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="sheet-foot">' +
+          '<button class="btn ghost" data-go2="' + u.id + '">' + t('sheet.visitUnit') + '</button>' +
+          '<button class="btn ghost" data-close>' + t('sheet.close') + '</button>' +
+        '</div>';
+      modalEl.classList.add('open');
+      hideHint();
+      return;
     }
 
     var body;
@@ -1873,12 +1969,12 @@
       el.setAttribute('aria-pressed', String(el.getAttribute('data-lang') === lang));
     });
     $('#search').setAttribute('placeholder', t(activeTab === 'products' ? 'search.products' : 'search.spaces'));
-    if (window.MallLobby && $('#lb-start')) renderLobby();
+    if (window.MallLobby && $('#lb-mode')) renderLobby();
 
     var wl = $('#welcome-list');
     if (wl) {
       wl.innerHTML = '';
-      ['welcome.1', 'welcome.2', 'welcome.3', 'welcome.4', 'welcome.5', 'welcome.6'].forEach(function (k) {
+      ['welcome.1', 'welcome.2', visitorMode() ? 'welcome.3v' : 'welcome.3', 'welcome.4', 'welcome.5', 'welcome.6'].forEach(function (k) {
         var li = document.createElement('li');
         li.innerHTML = t(k);
         wl.appendChild(li);
@@ -1915,7 +2011,7 @@
     // unit
     UNITS.forEach(function (u) {
       var st = statusOf(u), meta = STATUS[st];
-      if (document.body.classList.contains('share-mode')) meta = { color: u.baseStatus === 'rented' && u.tenant ? '#7c8496' : '#3a404d' };
+      if (document.body.classList.contains('visitor-mode')) meta = { color: u.baseStatus === 'rented' && u.tenant ? '#7c8496' : '#3a404d' };
       var p = toMap(u.cx - u.dx / 2, u.cz - u.dz / 2);
       ctx.fillStyle = meta.color;
       ctx.globalAlpha = 0.78;
@@ -2126,7 +2222,7 @@
         else if ($('#welcome').style.display !== 'none') $('#welcome').style.display = 'none';
       } else if (k === 'e' && hoveredProduct) { openProduct(hoveredProduct.id); }
       else if (k === 'e' && hovered) { openUnit(hovered.id); }
-      else if (k === 'enter' && window.MallLobby && MallLobby.status().role) {
+      else if (k === 'enter' && window.MallLobby && MallLobby.status().connected) {
         e.preventDefault(); setLobbyOpen(true); $('#lb-input').focus();
       }
       else if (k === 'm') { $('#mapwrap').classList.toggle('hidden'); }
@@ -2235,11 +2331,13 @@
     world.attachPost(post);
   }
 
-  /* --------------------------- lobby multiplayer --------------------------- */
-  // Jaringan & avatar ada di mall-lobby.js; di sini hanya UI: buat/masuk lobby,
-  // undangan, daftar anggota, chat, dan modal untuk tamu yang membuka link undangan.
+  /* --------------------------- bagikan & jalan bareng --------------------------- */
+  // Link undangan dibuat langsung di browser (tanpa menunggu jaringan): ?mode=visitor|tenant
+  // menentukan tampilan penerima; &room=… menaruh mereka di ruang jalan bareng. Ruang tidak
+  // butuh host — siapa pun yang membuka link lebih dulu menjadi hub (lihat mall-lobby.js).
   var LS_PROFILE = 'wolfpup-mall-profile-v1';
-  var lobbyReady = false, lobbyColor = 0, lobbyUnread = 0, lobbyHostName = '', worldWaiters = [];
+  var lobbyReady = false, lobbyColor = 0, lobbyUnread = 0, worldWaiters = [];
+  var inviteMode = 'visitor', shareRoom = null;
   function whenWorld(fn) { if (world && lobbyReady) fn(); else worldWaiters.push(fn); }
   function lobbyProfile() { var p = loadJSON(LS_PROFILE, {}); return { name: typeof p.name === 'string' ? p.name : '', color: (p.color | 0) % 10 }; }
 
@@ -2269,7 +2367,7 @@
     var d = document.createElement('div');
     d.className = 'msg' + (sys ? ' sys' : '');
     if (!sys) { var b = document.createElement('b'); b.style.color = color; b.textContent = name; d.appendChild(b); }
-    d.appendChild(document.createTextNode(text));          // teks dari pemain lain selalu sebagai teks, bukan HTML
+    d.appendChild(document.createTextNode(text));          // teks dari orang lain selalu sebagai teks, bukan HTML
     return d;
   }
   function pushChat(name, color, text, sys) {
@@ -2277,7 +2375,6 @@
     box.appendChild(chatEl(name, color, text, sys));
     while (box.children.length > 80) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
-    // ringkasan di layar (hilang sendiri)
     var log = $('#chatlog'), item = chatEl(name, color, text, sys);
     log.appendChild(item);
     while (log.children.length > 4) log.removeChild(log.firstChild);
@@ -2290,64 +2387,111 @@
     b.hidden = !lobbyUnread; b.textContent = lobbyUnread > 9 ? '9+' : String(lobbyUnread);
   }
 
+  function currentRoom() {
+    var st = MallLobby.status();
+    if (st.room) return st.room;
+    if (!shareRoom) shareRoom = MallLobby.roomFromUrl() || MallLobby.newRoomId();
+    return shareRoom;
+  }
+  function linkMode() { return visitorMode() ? 'visitor' : inviteMode; }   // visitor hanya bisa mengundang visitor
+  function inviteLink() {
+    var u = new URL(location.href);
+    u.search = ''; u.hash = '';
+    u.searchParams.set('mode', linkMode());
+    if ($('#lb-together').checked) u.searchParams.set('room', currentRoom());
+    return u.toString();
+  }
+
+  // bagikan: share sheet bawaan → salin ke clipboard → pilih teks manual (iOS lama)
+  function copyLink(url) {
+    var ok = function () { toast(t('lobby.copied'), 'good'); };
+    var manual = function () {
+      var ta = document.createElement('textarea');
+      ta.value = url; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, url.length);
+      var done = false; try { done = document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      if (done) { ok(); return; }
+      var inp = $('#lb-link'); inp.focus(); inp.setSelectionRange(0, inp.value.length);
+      toast(t('share.copyManual'), 'warn');
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(ok, manual);
+    else manual();
+  }
+  function shareLink(url) {
+    var data = { title: 'Wolfpup Virtual Mall', text: t('share.text.' + linkMode()), url: url };
+    var can = navigator.share && (!navigator.canShare || navigator.canShare(data));
+    if (!can) { copyLink(url); return; }
+    try {
+      navigator.share(data).catch(function (err) {
+        if (err && err.name === 'AbortError') return;            // pengguna menutup share sheet
+        copyLink(url);
+      });
+    } catch (e) { copyLink(url); }
+  }
+
   function renderLobby() {
-    var st = MallLobby.status(), inSession = !!st.role, players = MallLobby.players();
-    $('#lb-start').hidden = inSession; $('#lb-session').hidden = !inSession;
-    $('.lb-intro').textContent = t('lobby.intro', { max: st.max });
-    $('#lb-count').textContent = inSession ? st.count + '/' + st.max : '0/' + st.max;
-    var host = players.filter(function (p) { return p.isHost; })[0];
-    if (host) lobbyHostName = host.name;
-    $('#lb-sub').textContent = !inSession ? '' : st.role === 'host' ? t('lobby.subHost') : t('lobby.subGuest', { host: lobbyHostName });
-    $('#lb-invite').hidden = st.role !== 'host';
-    $('#lb-link').value = st.invite || '';
-    $('#lb-share').hidden = !(st.role === 'host' && navigator.share);
-    $('#lb-leave').textContent = st.role === 'host' ? t('lobby.end') : t('lobby.leave');
+    var st = MallLobby.status(), inRoom = st.connected, busy = st.role === 'connecting' || st.role === 'reconnecting';
+    $('#lb-modebox').hidden = visitorMode();
+    Array.prototype.forEach.call(document.querySelectorAll('#lb-mode button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === inviteMode));
+    });
+    $('#lb-mode-desc').textContent = t('share.desc.' + linkMode());
+    $('#lb-together-lbl').textContent = t('share.together', { max: st.max });
+    $('#lb-nohost').textContent = $('#lb-together').checked ? t('share.noHostRoom') : t('share.noHostSolo');
+    $('#lb-link').value = inviteLink();
+    $('#lb-sub').textContent = t('share.youAre', { role: t('role.' + VIEW_MODE) });
+    $('#lb-roombox').hidden = !$('#lb-together').checked && !st.role;
+    $('#lb-profile').hidden = !!st.role;
+    $('#lb-session').hidden = !st.role;
+    $('#lb-count').hidden = !inRoom;
+    $('#lb-count').textContent = st.count + '/' + st.max;
+    var stEl = $('#lb-status');
+    stEl.textContent = inRoom ? (st.count > 1 ? t('share.st.live', { n: st.count - 1 }) : t('share.st.alone'))
+      : st.role === 'reconnecting' ? t('share.st.reconnecting') : busy ? t('lobby.connecting') : '';
+    stEl.classList.toggle('wait', !inRoom);
+    $('#lb-form').hidden = !inRoom;
     var ul = $('#lb-members'); ul.textContent = '';
-    players.forEach(function (p) {
+    MallLobby.players().forEach(function (p) {
       var li = document.createElement('li');
       var av = document.createElement('span'); av.className = 'av'; av.style.background = p.color; av.textContent = (p.name || '?').charAt(0).toUpperCase();
       var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name;
-      li.appendChild(av); li.appendChild(nm);
-      var tags = [];
-      if (p.isHost) tags.push(t('lobby.hostTag'));
-      if (p.isMe) tags.push(t('lobby.you'));
-      if (tags.length) { var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = tags.join(' · '); li.appendChild(tg); }
-      if (st.role === 'host' && !p.isMe) {
-        var k = document.createElement('button'); k.className = 'kick'; k.type = 'button'; k.textContent = t('lobby.kick');
-        k.addEventListener('click', function () { MallLobby.kick(p.id); });
-        li.appendChild(k);
-      }
+      var tg = document.createElement('span'); tg.className = 'tag';
+      tg.textContent = t('role.' + p.mode) + (p.isMe ? ' · ' + t('lobby.you') : '');
+      li.appendChild(av); li.appendChild(nm); li.appendChild(tg);
       ul.appendChild(li);
     });
   }
 
-  function clearLobbyUrl() {
-    var u = new URL(location.href);
-    if (!u.searchParams.has('lobby')) return;
-    u.searchParams.delete('lobby');
-    history.replaceState(null, '', u.pathname + (u.search ? u.search : '') + u.hash);
-  }
-
   function onLobbyEvent(type, d) {
-    if (type === 'state') applyShareMode();
     if (type === 'state' || type === 'players') renderLobby();
     else if (type === 'chat') pushChat(d.name, d.color, d.text, false);
     else if (type === 'system') pushChat('', '', t(d.key, { name: d.name }), true);
-    else if (type === 'ended') { toast(t('lobby.ended'), 'warn'); clearLobbyUrl(); renderLobby(); }
-    else if (type === 'kicked') { toast(t('lobby.youKicked'), 'warn'); clearLobbyUrl(); renderLobby(); }
+    else if (type === 'dropped') { toast(lobbyErrorText(d), 'warn'); renderLobby(); }
   }
 
   function setLobbyOpen(open) {
     $('#lobby').classList.toggle('hidden', !open);
     document.body.classList.toggle('lobby-open', open);
     $('#btn-lobby').classList.toggle('on', open);
-    if (open) { lobbyUnread = 0; renderBadge(); }
+    if (open) { lobbyUnread = 0; renderBadge(); renderLobby(); }
   }
 
   function lobbyErrorText(err) {
     var code = err && err.type;
-    var key = 'lobby.err.' + (['full', 'notfound', 'timeout', 'closed', 'network'].indexOf(code) >= 0 ? code : 'network');
+    var key = 'lobby.err.' + (['full', 'timeout', 'network'].indexOf(code) >= 0 ? code : 'network');
     return t(key, { max: MallLobby.max });
+  }
+
+  function enterRoom(room, name, onOk, onErr) {
+    saveJSON(LS_PROFILE, { name: name, color: lobbyColor });
+    if (window.MallAudio) MallAudio.start();
+    whenWorld(function () {
+      MallLobby.enter(room, { name: name, color: lobbyColor, mode: VIEW_MODE }).then(onOk, function (err) {
+        if (err && err.type === 'cancelled') return;
+        onErr(err);
+      });
+    });
   }
 
   function initLobbyUI() {
@@ -2359,36 +2503,28 @@
 
     $('#btn-lobby').addEventListener('click', function () { setLobbyOpen($('#lobby').classList.contains('hidden')); });
     $('#lb-close').addEventListener('click', function () { setLobbyOpen(false); });
+    $('#lb-mode').addEventListener('click', function (e) {
+      var m = e.target.getAttribute && e.target.getAttribute('data-mode');
+      if (m) { inviteMode = m; renderLobby(); }
+    });
+    $('#lb-together').addEventListener('change', renderLobby);
+    $('#lb-copy').addEventListener('click', function () { copyLink(inviteLink()); });
+    $('#lb-share').addEventListener('click', function () { shareLink(inviteLink()); });
 
-    $('#lb-host').addEventListener('click', function () {
-      var note = $('#lb-start-note'), name = $('#lb-name').value.trim();
+    $('#lb-enter').addEventListener('click', function () {
+      var note = $('#lb-start-note'), name = $('#lb-name').value.trim(), btn = this;
       note.classList.remove('err');
       if (!supported) { note.textContent = t('lobby.err.unsupported'); note.classList.add('err'); return; }
       if (!name) { note.textContent = t('lobby.needName'); note.classList.add('err'); $('#lb-name').focus(); return; }
-      saveJSON(LS_PROFILE, { name: name, color: lobbyColor });
-      note.textContent = t('lobby.creating'); this.disabled = true;
-      var btn = this;
-      whenWorld(function () {
-        MallLobby.host(name, lobbyColor).then(function () {
-          note.textContent = ''; btn.disabled = false;
-          renderLobby(); toast(t('lobby.created'), 'good');
-        }).catch(function (err) {
-          btn.disabled = false; note.textContent = lobbyErrorText(err); note.classList.add('err');
-        });
+      note.textContent = t('lobby.connecting'); btn.disabled = true;
+      enterRoom(currentRoom(), name, function () {
+        note.textContent = ''; btn.disabled = false; renderLobby();
+      }, function (err) {
+        btn.disabled = false; note.textContent = lobbyErrorText(err); note.classList.add('err'); renderLobby();
       });
     });
-
-    $('#lb-copy').addEventListener('click', function () {
-      var link = $('#lb-link').value; if (!link) return;
-      var done = function () { toast(t('lobby.copied'), 'good'); };
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, function () { $('#lb-link').select(); document.execCommand('copy'); done(); });
-      else { $('#lb-link').select(); document.execCommand('copy'); done(); }
-    });
-    $('#lb-share').addEventListener('click', function () {
-      if (navigator.share) navigator.share({ title: 'Wolfpup Virtual Mall', text: t('lobby.shareText'), url: $('#lb-link').value }).catch(function () {});
-    });
     $('#lb-leave').addEventListener('click', function () {
-      MallLobby.leave(); clearLobbyUrl(); renderLobby(); toast(t('lobby.youLeft'));
+      MallLobby.leave(); renderLobby(); toast(t('share.youLeft'));
     });
     $('#lb-form').addEventListener('submit', function (e) {
       e.preventDefault();
@@ -2397,29 +2533,27 @@
     });
     $('#lb-input').addEventListener('keydown', function (e) { if (e.key === 'Escape') this.blur(); });
 
-    // tamu dari link undangan → modal masuk lobby menggantikan layar selamat datang
-    var invite = window.MallLobby ? MallLobby.lobbyFromUrl() : '';
-    if (invite) {
+    // link undangan dengan ruang → modal masuk (menggantikan layar selamat datang)
+    var room = window.MallLobby ? MallLobby.roomFromUrl() : '';
+    if (room) {
+      shareRoom = room;
       $('#welcome').style.display = 'none';
       $('#lb-join').hidden = false;
+      $('#lbj-role').innerHTML = t('share.joinAs') + ' <b>' + esc(t('role.' + VIEW_MODE)) + '</b>';
       if (!supported) { $('#lbj-status').textContent = t('lobby.err.unsupported'); $('#lbj-status').classList.add('err'); $('#lbj-go').disabled = true; }
-      $('#lbj-solo').addEventListener('click', function () { $('#lb-join').hidden = true; clearLobbyUrl(); if (window.MallAudio) MallAudio.start(); });
+      $('#lbj-solo').addEventListener('click', function () { $('#lb-join').hidden = true; if (window.MallAudio) MallAudio.start(); });
       $('#lbj-go').addEventListener('click', function () {
-        var st = $('#lbj-status'), name = $('#lbj-name').value.trim(), btn = this;
-        st.classList.remove('err');
-        if (!name) { st.textContent = t('lobby.needName'); st.classList.add('err'); $('#lbj-name').focus(); return; }
-        saveJSON(LS_PROFILE, { name: name, color: lobbyColor });
+        var stEl = $('#lbj-status'), name = $('#lbj-name').value.trim(), btn = this;
+        stEl.classList.remove('err');
+        if (!name) { stEl.textContent = t('lobby.needName'); stEl.classList.add('err'); $('#lbj-name').focus(); return; }
         $('#lb-name').value = name;
-        if (window.MallAudio) MallAudio.start();
-        st.textContent = t('lobby.connecting'); btn.disabled = true;
-        whenWorld(function () {
-          MallLobby.join(invite, name, lobbyColor).then(function () {
-            $('#lb-join').hidden = true; btn.disabled = false; st.textContent = '';
-            renderLobby(); setLobbyOpen(!window.matchMedia('(max-width: 820px)').matches);
-            toast(t('lobby.welcome'), 'good');
-          }).catch(function (err) {
-            btn.disabled = false; st.textContent = lobbyErrorText(err); st.classList.add('err');
-          });
+        stEl.textContent = t('lobby.connecting'); btn.disabled = true;
+        enterRoom(room, name, function () {
+          $('#lb-join').hidden = true; btn.disabled = false; stEl.textContent = '';
+          renderLobby(); setLobbyOpen(!window.matchMedia('(max-width: 820px)').matches);
+          toast(t('lobby.welcome'), 'good');
+        }, function (err) {
+          btn.disabled = false; stEl.textContent = lobbyErrorText(err); stEl.classList.add('err');
         });
       });
       $('#lbj-name').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#lbj-go').click(); });
@@ -2439,6 +2573,7 @@
         lobbyReady = true;
         worldWaiters.splice(0).forEach(function (fn) { fn(); });
       }
+      applyViewMode();
       if (window.MallPost) attachPost();
       else window.addEventListener('mallpost-ready', attachPost, { once: true });
       showTod();
@@ -2461,6 +2596,7 @@
     initUI();
     applyLang(lang);
     initLobbyUI();
+    applyViewMode();
     // pastikan komponen jalan kaki aktif (didaftarkan setelah scene di-parse)
     var cam = document.getElementById('cam');
     if (cam) cam.setAttribute('mall-controls', '');

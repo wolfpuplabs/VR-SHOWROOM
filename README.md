@@ -113,26 +113,33 @@ dibangun prosedural oleh `mall-world.js`. Dependensi CDN hanya A-Frame (dunia 3D
 
   Tier bisa dipaksa dari panel bantuan (**?** → Graphics); halaman dimuat ulang untuk menerapkannya.
 
-**Lobby multiplayer** (`mall-lobby.js`)
+**Bagikan & jalan bareng** (`mall-lobby.js`)
 
-- Tombol **Lobby** di toolbar → tulis nama, pilih warna karakter → **Host a lobby**. Kamu jadi
-  host dan mendapat **link undangan** (`mall.html?lobby=…`) untuk disalin/dibagikan.
-- Orang yang membuka link langsung melihat layar *You're invited*: tulis nama, pilih warna, **Join**.
-- Setiap pemain tampil sebagai karakter 3D berwarna dengan **papan nama** (host bertanda ★),
-  bergerak & menoleh mulus, punya titik di denah, dan **gelembung chat** di atas kepala.
-- **Chat** di panel Lobby (atau tekan **Enter**); ringkasan pesan muncul sebentar di layar,
-  dan tombol Lobby menampilkan jumlah pesan belum dibaca.
-- **Maks. 10 orang per sesi undangan** (host termasuk) — tamu ke-11 ditolak dengan pesan "lobby penuh".
-  Host bisa mengeluarkan tamu; saat host keluar, sesi berakhir untuk semua.
-- **Mode jelajah**: selama berada di lobby (host maupun tamu) semua UI leasing disembunyikan —
-  pill okupansi, tab *Spaces for rent*, filter & ekspor booking, pin "for lease", form sewa, dan
-  warna status di denah. Pengunjung hanya menjelajah dan membuka produk (3D & AR); hover etalase
-  menampilkan nama tenant saja. Keluar dari lobby → tampilan leasing kembali seperti biasa.
-- Tanpa server sendiri: koneksi **WebRTC peer-to-peer** lewat [PeerJS](https://peerjs.com)
-  (`vendor/peerjs/`). Server sinyal publik PeerJS hanya dipakai untuk berkenalan; posisi (10×/detik)
-  dan chat mengalir langsung antar browser dengan **host sebagai hub**. Host memvalidasi semua data
-  tamu (nama & chat dibersihkan, posisi dibatasi, chat dibatasi 1 pesan per 0,6 detik).
-  Jaringan kantor yang sangat ketat bisa memblokir WebRTC; PeerJS memakai TURN publiknya sebagai cadangan.
+- Tombol **Share** di toolbar membuka panel bagikan. Link undangan dibuat **langsung di browser**
+  (tidak menunggu jaringan) dan bisa disalin atau dibagikan lewat share sheet; kalau share sheet
+  tidak tersedia/gagal, link otomatis disalin, dan kalau browser memblokir clipboard link dipilih
+  untuk disalin manual.
+- **Undang sebagai** — menentukan tampilan orang yang membuka link (`?mode=`):
+
+  | Mode | Yang bisa dilakukan |
+  | --- | --- |
+  | **Visitor** | jelajah, info toko (klik etalase), produk 3D & AR, chat — semua UI leasing disembunyikan (pill okupansi, tab *Spaces for rent*, filter, ekspor booking, pin "for lease", harga & form sewa, warna status di denah) |
+  | **Tenant** | semua fitur visitor **plus** leasing lengkap |
+
+  Membuka mall tanpa `mode` = tampilan pemilik (lengkap). Visitor hanya bisa membagikan link visitor.
+  Catatan: mode hanya mengatur tampilan di browser, bukan izin keamanan — booking di demo ini
+  tersimpan lokal di perangkat masing-masing.
+- **Jalan bareng tanpa host** (`&room=`): siapa pun yang membuka link lebih dulu otomatis menjadi
+  *hub* koneksi ruang itu — pembuat link tidak perlu online. Saat hub keluar atau tabnya ditutup,
+  anggota lain mengambil alih dalam ±1–5 detik dan semua tersambung ulang. Maks. **10 orang per
+  ruang**; orang ke-11 mendapat pesan "ruang penuh" dan tetap bisa menjelajah sendiri.
+- Setiap orang tampil sebagai karakter 3D berwarna dengan papan nama, gelembung chat, dan titik di
+  denah; daftar anggota menampilkan perannya (Visitor / Tenant / Pemilik). Chat di panel (atau
+  tekan **Enter**), ringkasan pesan muncul sebentar di layar.
+- Koneksi **WebRTC peer-to-peer** lewat [PeerJS](https://peerjs.com) (`vendor/peerjs/`). Server
+  sinyal publik PeerJS hanya dipakai untuk berkenalan; posisi (10×/detik) dan chat mengalir langsung
+  antar browser lewat hub. Hub memvalidasi semua data (nama & chat dibersihkan, posisi dibatasi,
+  chat maks. 1 pesan per 0,6 detik) dan memutus anggota yang diam >6 detik.
 
 **Product showcase + AR**
 
@@ -246,7 +253,7 @@ mall-world.js                  renderer 3D: material, pencahayaan, arsitektur, t
 mall-post.js                   post-processing (ES module): GTAO, bloom, grading sinematik
 mall-sky.js                    panorama 360° HDR otomatis (langit, awan, kota) → latar + HDRI
 mall-audio.js                  suara air mancur 3D, langkah kaki, room tone (WebAudio)
-mall-lobby.js                  lobby multiplayer P2P: host/undangan, avatar, chat, maks. 10 orang
+mall-lobby.js                  ruang jalan bareng P2P tanpa host: avatar, chat, maks. 10 orang
 vendor/peerjs/                 PeerJS 1.5.5 (MIT) untuk koneksi WebRTC
 vendor/three/                  pass post-processing three.js (MIT) + shim ke THREE milik A-Frame
 assets/Porsche 356B.glb        mobil showroom unit A4 (web + AR Android)
